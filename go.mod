@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/andybalholm/brotli v1.2.0 // indirect
-	github.com/bitop-dev/agent-core v0.0.0-20260301033704-c2582184bde6 // indirect
+	github.com/bitop-dev/agent-core v0.0.0-20260301154636-2d8be41cbf74 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fasthttp/websocket v1.5.8 // indirect
 	github.com/gofiber/contrib/websocket v1.3.4 // indirect

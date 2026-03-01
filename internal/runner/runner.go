@@ -155,10 +155,34 @@ func (r *Runner) execute(req RunRequest) {
 
 	engine := agentpkg.NewToolEngine()
 
+	// Load skills attached to this agent
+	agentSkills, err := r.store.ListAgentSkills(ctx, req.AgentID)
+	if err != nil {
+		slog.Error("failed to load agent skills", "agent_id", req.AgentID, "error", err)
+	}
+
+	var skills []*agentpkg.Skill
+	for _, as := range agentSkills {
+		// If we have full SKILL.md content, parse it to get rich metadata
+		if as.SkillMd != "" {
+			if parsed, err := agentpkg.ParseSkillMD([]byte(as.SkillMd)); err == nil {
+				skills = append(skills, parsed)
+				continue
+			}
+		}
+		// Fallback: create a minimal skill from DB fields
+		skills = append(skills, agentpkg.NewSkill(as.Name, as.Description, as.SkillMd))
+	}
+
+	if len(skills) > 0 {
+		slog.Info("loaded agent skills", "agent_id", req.AgentID, "count", len(skills))
+	}
+
 	agent, err := agentpkg.NewBuilder().
 		WithConfig(cfg).
 		WithProvider(p).
 		WithTools(engine).
+		WithSkills(skills).
 		WithObserver(agentpkg.NoopObserver{}).
 		Build()
 	if err != nil {
