@@ -2,7 +2,7 @@
 
 Go REST API server for the Agent Platform. Wraps [agent-core](https://github.com/bitop-dev/agent-core) with persistence, authentication, real-time WebSocket streaming, and a multi-source skill registry.
 
-> **Status**: Phase 2 + Phase 4 skill sources complete — 62 files, ~5.5K lines, 22 tests, 11 commits.
+> **Status**: Phase 2–9 complete — WASM sandbox runner, OAuth, audit logging, team-scoped resources, Prometheus metrics.
 
 ---
 
@@ -43,6 +43,10 @@ docker compose up --build
 | POST | `/api/v1/auth/register` | Register new user → returns access + refresh tokens |
 | POST | `/api/v1/auth/login` | Login → returns access + refresh tokens |
 | POST | `/api/v1/auth/refresh` | Exchange refresh token for new access token |
+| GET | `/api/v1/auth/github` | GitHub OAuth login redirect |
+| GET | `/api/v1/auth/github/callback` | GitHub OAuth callback |
+| GET | `/api/v1/auth/google` | Google OAuth login redirect |
+| GET | `/api/v1/auth/google/callback` | Google OAuth callback |
 
 ### Protected (Bearer token required, 120/min per IP)
 
@@ -60,6 +64,7 @@ docker compose up --build
 | GET | `/api/v1/agents/:id` | Get agent details |
 | PUT | `/api/v1/agents/:id` | Update agent |
 | DELETE | `/api/v1/agents/:id` | Delete agent |
+| PUT | `/api/v1/agents/:id/team` | Assign agent to team |
 
 #### Runs
 | Method | Path | Description |
@@ -70,6 +75,7 @@ docker compose up --build
 | GET | `/api/v1/agents/:agent_id/runs` | List runs for a specific agent |
 | GET | `/api/v1/runs/:id/events` | Get full event log |
 | POST | `/api/v1/runs/:id/cancel` | Cancel an in-flight run |
+| GET | `/api/v1/runs/:id/children` | List sub-agent (child) runs |
 
 #### API Keys
 | Method | Path | Description |
@@ -98,6 +104,42 @@ docker compose up --build
 | DELETE | `/api/v1/skill-sources/:id` | Remove source (can't delete default) |
 | POST | `/api/v1/skill-sources/:id/sync` | Re-sync one source |
 | POST | `/api/v1/skill-sources/sync` | Re-sync all sources |
+
+#### Schedules
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/v1/schedules` | Create schedule (cron/interval/one-shot) |
+| GET | `/api/v1/schedules` | List schedules |
+| GET | `/api/v1/schedules/:id` | Get schedule |
+| PUT | `/api/v1/schedules/:id` | Update schedule |
+| DELETE | `/api/v1/schedules/:id` | Delete schedule |
+| POST | `/api/v1/schedules/:id/enable` | Enable schedule |
+| POST | `/api/v1/schedules/:id/disable` | Disable schedule |
+| POST | `/api/v1/schedules/:id/trigger` | Manual trigger |
+
+#### Teams
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/v1/teams` | Create team |
+| GET | `/api/v1/teams` | List teams |
+| GET | `/api/v1/teams/:id` | Get team |
+| DELETE | `/api/v1/teams/:id` | Delete team |
+| GET | `/api/v1/teams/:id/members` | List members |
+| POST | `/api/v1/teams/:id/invitations` | Invite user by email |
+| POST | `/api/v1/invitations/:id/accept` | Accept invitation |
+| DELETE | `/api/v1/teams/:id/members/:user_id` | Remove member |
+
+#### Audit Log
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/v1/audit-log` | Paginated audit trail (`?page=&per_page=`) |
+
+#### Observability
+| Method | Path | Description |
+|---|---|---|
+| GET | `/health` | Liveness probe |
+| GET | `/readyz` | Readiness probe (DB check) |
+| GET | `/metrics` | Prometheus text exposition format |
 
 ### WebSocket
 
