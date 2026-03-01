@@ -48,7 +48,7 @@ func TestE2EAgentRun(t *testing.T) {
 	r.Start()
 	defer r.Stop()
 
-	app := NewRouter(store, a, enc, r, hub, registry.NewSyncer(store.Queries))
+	app := NewRouter(store, a, enc, r, hub, registry.NewSyncer(store.Queries), nil)
 
 	// 1. Register user
 	token := e2eRegister(t, app, "e2e@test.com", "E2E Tester", "pass123")

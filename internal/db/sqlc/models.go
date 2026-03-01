@@ -72,6 +72,30 @@ type RunEvent struct {
 	OccurredAt time.Time      `json:"occurred_at"`
 }
 
+type Schedule struct {
+	ID                string         `json:"id"`
+	UserID            string         `json:"user_id"`
+	AgentID           string         `json:"agent_id"`
+	Name              string         `json:"name"`
+	Description       string         `json:"description"`
+	ScheduleType      string         `json:"schedule_type"`
+	CronExpr          string         `json:"cron_expr"`
+	IntervalSeconds   int64          `json:"interval_seconds"`
+	Timezone          string         `json:"timezone"`
+	Mission           string         `json:"mission"`
+	Enabled           bool           `json:"enabled"`
+	OverlapPolicy     string         `json:"overlap_policy"`
+	MaxRetries        int64          `json:"max_retries"`
+	NextRunAt         sql.NullTime   `json:"next_run_at"`
+	LastRunAt         sql.NullTime   `json:"last_run_at"`
+	LastRunStatus     sql.NullString `json:"last_run_status"`
+	LastRunID         sql.NullString `json:"last_run_id"`
+	LastError         sql.NullString `json:"last_error"`
+	ConsecutiveErrors int64          `json:"consecutive_errors"`
+	CreatedAt         time.Time      `json:"created_at"`
+	UpdatedAt         time.Time      `json:"updated_at"`
+}
+
 type Skill struct {
 	ID          string         `json:"id"`
 	UserID      sql.NullString `json:"user_id"`

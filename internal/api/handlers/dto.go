@@ -179,6 +179,75 @@ func skillsToDTOs(skills []sqlc.Skill) []SkillDTO {
 	return out
 }
 
+// --- Schedule ---
+
+type ScheduleDTO struct {
+	ID                string     `json:"id"`
+	UserID            string     `json:"user_id"`
+	AgentID           string     `json:"agent_id"`
+	Name              string     `json:"name"`
+	Description       string     `json:"description,omitempty"`
+	ScheduleType      string     `json:"schedule_type"`
+	CronExpr          string     `json:"cron_expr,omitempty"`
+	IntervalSeconds   int        `json:"interval_seconds,omitempty"`
+	Timezone          string     `json:"timezone"`
+	Mission           string     `json:"mission,omitempty"`
+	Enabled           bool       `json:"enabled"`
+	OverlapPolicy     string     `json:"overlap_policy"`
+	MaxRetries        int        `json:"max_retries"`
+	NextRunAt         *time.Time `json:"next_run_at,omitempty"`
+	LastRunAt         *time.Time `json:"last_run_at,omitempty"`
+	LastRunStatus     string     `json:"last_run_status,omitempty"`
+	LastRunID         string     `json:"last_run_id,omitempty"`
+	LastError         string     `json:"last_error,omitempty"`
+	ConsecutiveErrors int        `json:"consecutive_errors"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+}
+
+func scheduleToDTO(s sqlc.Schedule) ScheduleDTO {
+	dto := ScheduleDTO{
+		ID:                s.ID,
+		UserID:            s.UserID,
+		AgentID:           s.AgentID,
+		Name:              s.Name,
+		Description:       s.Description,
+		ScheduleType:      s.ScheduleType,
+		CronExpr:          s.CronExpr,
+		IntervalSeconds:   int(s.IntervalSeconds),
+		Timezone:          s.Timezone,
+		Mission:           s.Mission,
+		Enabled:           s.Enabled,
+		OverlapPolicy:     s.OverlapPolicy,
+		MaxRetries:        int(s.MaxRetries),
+		LastRunStatus:     s.LastRunStatus.String,
+		LastRunID:         s.LastRunID.String,
+		LastError:         s.LastError.String,
+		ConsecutiveErrors: int(s.ConsecutiveErrors),
+		CreatedAt:         s.CreatedAt,
+		UpdatedAt:         s.UpdatedAt,
+	}
+	if s.NextRunAt.Valid {
+		dto.NextRunAt = &s.NextRunAt.Time
+	}
+	if s.LastRunAt.Valid {
+		dto.LastRunAt = &s.LastRunAt.Time
+	}
+	return dto
+}
+
+func schedulesToDTOs(schedules []sqlc.Schedule) []ScheduleDTO {
+	out := make([]ScheduleDTO, len(schedules))
+	for i, s := range schedules {
+		out[i] = scheduleToDTO(s)
+	}
+	return out
+}
+
+func schedulesByAgentToDTOs(schedules []sqlc.Schedule) []ScheduleDTO {
+	return schedulesToDTOs(schedules)
+}
+
 // --- Run Event ---
 
 type RunEventDTO struct {

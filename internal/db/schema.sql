@@ -100,3 +100,27 @@ CREATE TABLE run_events (
     data_json   TEXT,
     occurred_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE schedules (
+    id              TEXT PRIMARY KEY,
+    user_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    agent_id        TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    name            TEXT NOT NULL,
+    description     TEXT NOT NULL DEFAULT '',
+    schedule_type   TEXT NOT NULL DEFAULT 'cron',
+    cron_expr       TEXT NOT NULL DEFAULT '',
+    interval_seconds INTEGER NOT NULL DEFAULT 0,
+    timezone        TEXT NOT NULL DEFAULT 'UTC',
+    mission         TEXT NOT NULL DEFAULT '',
+    enabled         BOOLEAN NOT NULL DEFAULT true,
+    overlap_policy  TEXT NOT NULL DEFAULT 'skip',
+    max_retries     INTEGER NOT NULL DEFAULT 3,
+    next_run_at     TIMESTAMP,
+    last_run_at     TIMESTAMP,
+    last_run_status TEXT,
+    last_run_id     TEXT,
+    last_error      TEXT,
+    consecutive_errors INTEGER NOT NULL DEFAULT 0,
+    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

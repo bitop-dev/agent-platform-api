@@ -8,12 +8,15 @@ import (
 	"os/signal"
 	"syscall"
 
+	"time"
+
 	"github.com/bitop-dev/agent-platform-api/internal/api"
 	"github.com/bitop-dev/agent-platform-api/internal/auth"
 	"github.com/bitop-dev/agent-platform-api/internal/config"
 	"github.com/bitop-dev/agent-platform-api/internal/db"
 	"github.com/bitop-dev/agent-platform-api/internal/registry"
 	"github.com/bitop-dev/agent-platform-api/internal/runner"
+	"github.com/bitop-dev/agent-platform-api/internal/scheduler"
 	"github.com/bitop-dev/agent-platform-api/internal/ws"
 )
 
@@ -78,8 +81,13 @@ func run() error {
 	r.Start()
 	defer r.Stop()
 
+	// Scheduler — polls every 30s for due schedules
+	sched := scheduler.New(store, r, enc, 30*time.Second)
+	sched.Start()
+	defer sched.Stop()
+
 	// Router
-	app := api.NewRouter(store, a, enc, r, hub, syncer)
+	app := api.NewRouter(store, a, enc, r, hub, syncer, sched)
 
 	// Graceful shutdown
 	go func() {

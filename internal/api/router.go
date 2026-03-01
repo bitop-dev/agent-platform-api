@@ -16,11 +16,12 @@ import (
 	"github.com/bitop-dev/agent-platform-api/internal/db"
 	"github.com/bitop-dev/agent-platform-api/internal/registry"
 	"github.com/bitop-dev/agent-platform-api/internal/runner"
+	"github.com/bitop-dev/agent-platform-api/internal/scheduler"
 	"github.com/bitop-dev/agent-platform-api/internal/ws"
 )
 
 // NewRouter creates the Fiber app with all routes configured.
-func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Runner, hub *ws.Hub, syncer *registry.Syncer) *fiber.App {
+func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Runner, hub *ws.Hub, syncer *registry.Syncer, sched *scheduler.Scheduler) *fiber.App {
 	app := fiber.New(fiber.Config{
 		AppName:      "agent-platform-api",
 		ErrorHandler: errorHandler,
@@ -118,6 +119,18 @@ func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Run
 	api.Get("/agents/:agent_id/runs", runHandler.ListByAgent)
 	api.Get("/runs/:id/events", runHandler.Events)
 	api.Post("/runs/:id/cancel", runHandler.Cancel)
+
+	// Schedules
+	schedHandler := handlers.NewScheduleHandler(store, sched, r, enc)
+	api.Post("/schedules", schedHandler.Create)
+	api.Get("/schedules", schedHandler.List)
+	api.Get("/schedules/:id", schedHandler.Get)
+	api.Put("/schedules/:id", schedHandler.Update)
+	api.Delete("/schedules/:id", schedHandler.Delete)
+	api.Post("/schedules/:id/enable", schedHandler.Enable)
+	api.Post("/schedules/:id/disable", schedHandler.Disable)
+	api.Post("/schedules/:id/trigger", schedHandler.Trigger)
+	api.Get("/agents/:agent_id/schedules", schedHandler.ListByAgent)
 
 	// WebSocket — stream run events in real time
 	app.Use("/ws", func(c *fiber.Ctx) error {

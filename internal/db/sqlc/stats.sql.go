@@ -46,6 +46,24 @@ func (q *Queries) CountRunsByStatus(ctx context.Context, userID string) ([]Count
 	return items, nil
 }
 
+const countSchedules = `-- name: CountSchedules :one
+SELECT COUNT(*) as total,
+       SUM(CASE WHEN enabled = true THEN 1 ELSE 0 END) as active
+FROM schedules WHERE user_id = ?
+`
+
+type CountSchedulesRow struct {
+	Total  int64           `json:"total"`
+	Active sql.NullFloat64 `json:"active"`
+}
+
+func (q *Queries) CountSchedules(ctx context.Context, userID string) (CountSchedulesRow, error) {
+	row := q.db.QueryRowContext(ctx, countSchedules, userID)
+	var i CountSchedulesRow
+	err := row.Scan(&i.Total, &i.Active)
+	return i, err
+}
+
 const recentRuns = `-- name: RecentRuns :many
 SELECT r.id, r.agent_id, r.mission, r.model_provider, r.model_name, r.status, r.output_text, r.error_message, r.total_turns, r.input_tokens, r.output_tokens, r.cost_usd, r.duration_ms, r.created_at, r.started_at, r.completed_at, a.name as agent_name
 FROM runs r
