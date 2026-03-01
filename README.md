@@ -1,8 +1,8 @@
 # agent-platform-api
 
-Go REST API server for the Agent Platform. Wraps [agent-core](https://github.com/bitop-dev/agent-core) with persistence, authentication, real-time WebSocket streaming, and a skills registry.
+Go REST API server for the Agent Platform. Wraps [agent-core](https://github.com/bitop-dev/agent-core) with persistence, authentication, real-time WebSocket streaming, and a multi-source skill registry.
 
-> **Status**: Phase 2 complete — 32 files, 4.6K lines, 22 tests, 8 commits. All endpoints tested with real LLM execution.
+> **Status**: Phase 2 + Phase 4 skill sources complete — 62 files, ~5.5K lines, 22 tests, 11 commits.
 
 ---
 
@@ -56,17 +56,18 @@ docker compose up --build
 | Method | Path | Description |
 |---|---|---|
 | GET | `/api/v1/agents` | List user's agents |
-| POST | `/api/v1/agents` | Create agent (validates YAML config) |
+| POST | `/api/v1/agents` | Create agent |
 | GET | `/api/v1/agents/:id` | Get agent details |
-| PUT | `/api/v1/agents/:id` | Update agent (returns updated agent) |
+| PUT | `/api/v1/agents/:id` | Update agent |
 | DELETE | `/api/v1/agents/:id` | Delete agent |
 
 #### Runs
 | Method | Path | Description |
 |---|---|---|
 | POST | `/api/v1/runs` | Start a run (async, returns immediately) |
-| GET | `/api/v1/runs` | List user's runs |
+| GET | `/api/v1/runs` | List all user's runs |
 | GET | `/api/v1/runs/:id` | Get run status, output, metrics |
+| GET | `/api/v1/agents/:agent_id/runs` | List runs for a specific agent |
 | GET | `/api/v1/runs/:id/events` | Get full event log |
 | POST | `/api/v1/runs/:id/cancel` | Cancel an in-flight run |
 
@@ -83,11 +84,20 @@ docker compose up --build
 | POST | `/api/v1/skills` | Create skill |
 | GET | `/api/v1/skills` | List skills (filter by `?tier=`) |
 | GET | `/api/v1/skills/:id` | Get skill details |
-| PUT | `/api/v1/skills/:id` | Update skill (owner only) |
-| DELETE | `/api/v1/skills/:id` | Delete skill (owner only) |
+| PUT | `/api/v1/skills/:id` | Update skill |
+| DELETE | `/api/v1/skills/:id` | Delete skill |
 | POST | `/api/v1/agents/:id/skills` | Attach skill to agent |
 | DELETE | `/api/v1/agents/:id/skills/:skill_id` | Detach skill from agent |
 | GET | `/api/v1/agents/:id/skills` | List agent's skills |
+
+#### Skill Sources
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/v1/skill-sources` | List all skill sources (user's + system defaults) |
+| POST | `/api/v1/skill-sources` | Add custom GitHub skill repo |
+| DELETE | `/api/v1/skill-sources/:id` | Remove source (can't delete default) |
+| POST | `/api/v1/skill-sources/:id/sync` | Re-sync one source |
+| POST | `/api/v1/skill-sources/sync` | Re-sync all sources |
 
 ### WebSocket
 
@@ -113,18 +123,33 @@ docker compose up --build
               └──────────┼──────────┘
                          │
                     ┌────▼────┐
-                    │ Handlers│  (auth, agents, runs, skills, api-keys)
+                    │ Handlers│
                     └────┬────┘
                          │
-              ┌──────────┼──────────┐
-              │          │          │
-           Store      Runner     WS Hub
-          (sqlc)    (goroutine   (pub/sub
-                      pool)     by run ID)
-              │          │          │
-              ▼          ▼          ▼
-           SQLite    agent-core   WebSocket
-           /Postgres  pkg/agent   clients
+           ┌─────────┬───┼────┬──────────┐
+           │         │   │    │          │
+        Store    Runner  Hub  Syncer   Encryptor
+       (sqlc)  (goroutine (WS (registry (AES-256)
+               pool×4)  pub/sub) sync)
+           │         │   │    │          │
+           ▼         ▼   ▼    ▼          ▼
+        SQLite   agent-core  GitHub    API keys
+        /Postgres pkg/agent  repos     encrypted
+```
+
+### Skill Registry Sync
+
+On startup, the API:
+1. Creates a default skill source pointing to `github.com/bitop-dev/agent-platform-skills`
+2. Fetches `registry.json` from each source (GitHub raw content)
+3. Downloads `SKILL.md` for each skill
+4. Upserts skills into the database with source tracking
+
+Users can add custom sources (any GitHub repo with `registry.json`):
+```bash
+curl -X POST http://localhost:8080/api/v1/skill-sources \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"url":"github.com/mycorp/internal-skills","label":"Internal"}'
 ```
 
 ### Run Execution Flow
@@ -132,22 +157,14 @@ docker compose up --build
 1. `POST /api/v1/runs` → creates DB record (status: queued) → enqueues `RunRequest`
 2. Worker goroutine picks up request → resolves API key from DB → calls `agent.QuickRun()`
 3. Agent-core executes: LLM calls, tool execution, streaming events
-4. Events are written to DB (`run_events` table) AND broadcast to WebSocket hub
+4. Events written to DB (`run_events`) AND broadcast to WebSocket hub
 5. On completion: updates run record with output, metrics, status
-
-### Authentication
-
-- **Register/Login**: returns access token (60 min) + refresh token (7 days)
-- **Refresh**: exchange refresh token for new access token
-- **Token types enforced**: refresh tokens rejected on API routes, access tokens rejected on refresh endpoint
-- **Passwords**: bcrypt hashed
-- **API keys**: AES-256-GCM encrypted at rest (dev mode: plaintext with warning)
 
 ---
 
 ## Database
 
-### Schema (3 migrations)
+### Schema (4 migrations)
 
 | Table | Description |
 |---|---|
@@ -156,21 +173,20 @@ docker compose up --build
 | `agents` | Agent configs (name, prompt, model, YAML) |
 | `runs` | Run records (status, output, metrics, timestamps) |
 | `run_events` | Event log per run (seq, type, JSON data) |
-| `skills` | Skill registry (name, tier, SKILL.md content) |
+| `skills` | Skill registry (name, tier, SKILL.md, source tracking) |
 | `agent_skills` | Agent ↔ skill linking (ordered, with config) |
+| `skill_sources` | Registered skill repos (url, status, last synced) |
 
 ### Tooling
 
 - **goose**: embedded SQL migrations, auto-run on startup
 - **sqlc**: type-safe Go code generated from SQL queries
 - **SQLite** for dev (zero config), **PostgreSQL** for production
-- Driver auto-detected from `DATABASE_URL` prefix (`sqlite://` vs `postgres://`)
+- Driver auto-detected from `DATABASE_URL` prefix
 
 ---
 
 ## Configuration
-
-All configuration via environment variables:
 
 | Variable | Default | Description |
 |---|---|---|
@@ -189,61 +205,13 @@ All configuration via environment variables:
 | Layer | Choice |
 |---|---|
 | HTTP | [Fiber](https://gofiber.io/) v2 |
-| Database | SQLite ([modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite)) / PostgreSQL |
+| Database | SQLite / PostgreSQL |
 | SQL | [sqlc](https://sqlc.dev/) — type-safe generated Go |
 | Migrations | [goose](https://github.com/pressly/goose) — embedded SQL |
 | Auth | [golang-jwt/jwt](https://github.com/golang-jwt/jwt) v5 + bcrypt |
-| WebSocket | [gofiber/contrib/websocket](https://github.com/gofiber/contrib/tree/main/websocket) |
+| WebSocket | gofiber/contrib/websocket |
 | Agent Runtime | [agent-core/pkg/agent](https://github.com/bitop-dev/agent-core) |
 | Logging | `log/slog` (JSON to stdout) |
-| IDs | [google/uuid](https://github.com/google/uuid) v4 |
-
----
-
-## Project Structure
-
-```
-cmd/api/                    Server entrypoint, slog setup, graceful shutdown
-internal/
-  api/                      Fiber router, error handler, integration tests
-    handlers/
-      auth.go               Register, login, refresh
-      agents.go             Agent CRUD
-      runs.go               Run create, get, list, events, cancel
-      skills.go             Skill CRUD + agent-skill linking
-      api_keys.go           API key store/list/delete
-      models.go             Model catalog
-      dashboard.go          Dashboard stats
-      dto.go                Response DTOs (flatten sql.Null* types)
-    middleware/
-      auth.go               JWT middleware (rejects refresh tokens)
-      ratelimit.go          Token bucket rate limiter
-      requestid.go          X-Request-ID header
-  auth/
-    auth.go                 JWT generation (access + refresh pairs)
-    encrypt.go              AES-256-GCM encryptor, key hints
-  config/
-    config.go               Environment variable loader
-  db/
-    db.go                   Database wrapper (SQLite/Postgres detection)
-    migrations.go           Embedded goose migrations
-    migrations/
-      001_initial_schema.sql
-      002_skills.sql
-      003_api_key_base_url.sql
-    query/                  sqlc query definitions (.sql)
-    schema.sql              Full schema for sqlc codegen
-    sqlc/                   Generated Go code (do not edit)
-  runner/
-    runner.go               Goroutine pool (4 workers), RunRequest dispatch
-  ws/
-    hub.go                  WebSocket hub (room-based pub/sub by run ID)
-Dockerfile                  Multi-stage build (golang:1.25-alpine)
-docker-compose.yml          Dev setup (SQLite) + commented Postgres
-openapi.yaml                OpenAPI 3.1 spec for all endpoints
-sqlc.yaml                   sqlc configuration
-Makefile                    build, run, test, sqlc, migrate targets
-```
 
 ---
 
@@ -257,72 +225,20 @@ make test-race         # With race detector
 TEST_LLM_API_KEY=sk-... TEST_LLM_BASE_URL=https://api.openai.com/v1 make test
 ```
 
-### Test Coverage
-
-| Area | Tests | What's tested |
-|---|---|---|
-| Auth | 4 | JWT generate/validate, password hash, garbage tokens |
-| Encryption | 4 | AES encrypt/decrypt, dev mode plaintext, bad keys, key hints |
-| Router | 13 | Health, register/login, refresh tokens, agent CRUD, isolation, runs, API keys, rate limiting, dashboard, models, /me, request IDs |
-| E2E | 1 | Full flow: register → store key → create agent → run → verify LLM output + events (skips without env vars) |
-
----
-
-## API Examples
-
-### Register + Login
-
-```bash
-# Register
-curl -X POST http://localhost:8080/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","name":"User","password":"pass123"}'
-# Returns: { "token": "...", "refresh_token": "...", "user": {...} }
-
-# Login
-curl -X POST http://localhost:8080/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","password":"pass123"}'
-```
-
-### Store API Key
-
-```bash
-curl -X POST http://localhost:8080/api/v1/api-keys \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"provider":"openai","label":"My Key","key":"sk-...","is_default":true,"base_url":"https://api.openai.com/v1"}'
-```
-
-### Create Agent + Run
-
-```bash
-# Create agent
-curl -X POST http://localhost:8080/api/v1/agents \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Research Bot","system_prompt":"You are a research assistant.","model_name":"gpt-4o","model_provider":"openai"}'
-
-# Trigger run
-curl -X POST http://localhost:8080/api/v1/runs \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"agent_id":"<agent-id>","mission":"What are the latest AI trends?"}'
-```
-
 ---
 
 ## Part of the Agent Platform
 
 | Repo | Purpose | Status |
 |---|---|---|
-| [agent-core](https://github.com/bitop-dev/agent-core) | Standalone CLI + Go library | ✅ 111 tests |
-| **agent-platform-api** (this repo) | REST API server | ✅ 22 tests |
-| [agent-platform-web](https://github.com/bitop-dev/agent-platform-web) | Next.js web portal | ✅ 12 pages |
+| [agent-core](https://github.com/bitop-dev/agent-core) | Standalone CLI + Go library | ✅ 111 tests, 26 commits |
+| **agent-platform-api** (this repo) | Go Fiber REST API | ✅ 22 tests, 11 commits |
+| [agent-platform-web](https://github.com/bitop-dev/agent-platform-web) | Bun + Vite + React web portal | ✅ 11 pages, 6 commits |
+| [agent-platform-skills](https://github.com/bitop-dev/agent-platform-skills) | Community skill registry | ✅ 5 skills, 2 commits |
 | [agent-platform-docs](https://github.com/bitop-dev/agent-platform-docs) | Architecture & planning | ✅ Comprehensive |
 
 ---
 
 ## License
 
-TBD
+MIT
