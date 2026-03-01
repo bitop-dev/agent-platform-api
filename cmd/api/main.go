@@ -46,6 +46,15 @@ func run() error {
 	// Auth
 	a := auth.New(cfg.JWTSecret, cfg.JWTExpiryMinutes)
 
+	// Encryption for API keys at rest
+	enc, err := auth.NewEncryptor(cfg.EncryptionKey)
+	if err != nil {
+		return fmt.Errorf("encryption: %w", err)
+	}
+	if cfg.EncryptionKey == "" {
+		log.Println("⚠ ENCRYPTION_KEY not set — API keys stored in plaintext (dev mode)")
+	}
+
 	// WebSocket hub
 	hub := ws.NewHub()
 
@@ -55,7 +64,7 @@ func run() error {
 	defer r.Stop()
 
 	// Router
-	app := api.NewRouter(store, a, r, hub)
+	app := api.NewRouter(store, a, enc, r, hub)
 
 	// Graceful shutdown
 	go func() {

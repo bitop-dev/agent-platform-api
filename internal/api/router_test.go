@@ -49,13 +49,22 @@ func setupTest(t *testing.T) (*db.Store, *auth.Auth, func()) {
 	return store, a, cleanup
 }
 
+func newTestEncryptor(t *testing.T) *auth.Encryptor {
+	t.Helper()
+	enc, err := auth.NewEncryptor("") // dev mode
+	if err != nil {
+		t.Fatal(err)
+	}
+	return enc
+}
+
 func TestHealthCheck(t *testing.T) {
 	store, a, cleanup := setupTest(t)
 	defer cleanup()
 
 	hub := ws.NewHub()
 	r := runner.New(store, hub, 1)
-	app := NewRouter(store, a, r, hub)
+	app := NewRouter(store, a, newTestEncryptor(t), r, hub)
 
 	req := httptest.NewRequest("GET", "/health", nil)
 	resp, err := app.Test(req)
@@ -78,7 +87,7 @@ func TestRegisterAndLogin(t *testing.T) {
 
 	hub := ws.NewHub()
 	r := runner.New(store, hub, 1)
-	app := NewRouter(store, a, r, hub)
+	app := NewRouter(store, a, newTestEncryptor(t), r, hub)
 
 	// Register
 	body := `{"email":"test@example.com","name":"Test User","password":"secret123"}`
@@ -137,7 +146,7 @@ func TestAgentCRUD(t *testing.T) {
 
 	hub := ws.NewHub()
 	r := runner.New(store, hub, 1)
-	app := NewRouter(store, a, r, hub)
+	app := NewRouter(store, a, newTestEncryptor(t), r, hub)
 
 	// Register user and get token
 	token := registerUser(t, app, "crud@test.com", "Test", "pass123")
@@ -213,7 +222,7 @@ func TestUnauthorizedAccess(t *testing.T) {
 
 	hub := ws.NewHub()
 	r := runner.New(store, hub, 1)
-	app := NewRouter(store, a, r, hub)
+	app := NewRouter(store, a, newTestEncryptor(t), r, hub)
 
 	// No token
 	req := httptest.NewRequest("GET", "/api/v1/agents", nil)
@@ -237,7 +246,7 @@ func TestAgentIsolation(t *testing.T) {
 
 	hub := ws.NewHub()
 	r := runner.New(store, hub, 1)
-	app := NewRouter(store, a, r, hub)
+	app := NewRouter(store, a, newTestEncryptor(t), r, hub)
 
 	// Two users
 	token1 := registerUser(t, app, "user1@test.com", "User1", "pass1")
@@ -267,6 +276,142 @@ func TestAgentIsolation(t *testing.T) {
 	resp, _ = app.Test(req)
 	if resp.StatusCode != 403 {
 		t.Fatalf("expected 403 for delete, got %d", resp.StatusCode)
+	}
+}
+
+func TestRunCreation(t *testing.T) {
+	store, a, cleanup := setupTest(t)
+	defer cleanup()
+
+	hub := ws.NewHub()
+	r := runner.New(store, hub, 1)
+	// Don't start the runner — we just test the API layer
+	app := NewRouter(store, a, newTestEncryptor(t), r, hub)
+
+	token := registerUser(t, app, "runner@test.com", "Runner", "pass123")
+
+	// Create agent
+	body := `{"name":"Test Agent","system_prompt":"Hi","model_name":"gpt-4o"}`
+	req := httptest.NewRequest("POST", "/api/v1/agents", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, _ := app.Test(req)
+	var agent map[string]any
+	json.NewDecoder(resp.Body).Decode(&agent)
+	agentID := agent["id"].(string)
+
+	// Create run
+	body = `{"agent_id":"` + agentID + `","mission":"Say hello"}`
+	req = httptest.NewRequest("POST", "/api/v1/runs", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 202 {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("create run: expected 202, got %d: %s", resp.StatusCode, b)
+	}
+
+	var run map[string]any
+	json.NewDecoder(resp.Body).Decode(&run)
+	runID := run["id"].(string)
+
+	if run["status"] != "queued" {
+		t.Fatalf("expected status 'queued', got %v", run["status"])
+	}
+	if run["mission"] != "Say hello" {
+		t.Fatalf("expected mission 'Say hello', got %v", run["mission"])
+	}
+
+	// Get run
+	req = httptest.NewRequest("GET", "/api/v1/runs/"+runID, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, _ = app.Test(req)
+	if resp.StatusCode != 200 {
+		t.Fatalf("get run: expected 200, got %d", resp.StatusCode)
+	}
+
+	// List runs for agent
+	req = httptest.NewRequest("GET", "/api/v1/agents/"+agentID+"/runs", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, _ = app.Test(req)
+	if resp.StatusCode != 200 {
+		t.Fatalf("list runs: expected 200, got %d", resp.StatusCode)
+	}
+
+	var listResp map[string]any
+	json.NewDecoder(resp.Body).Decode(&listResp)
+	runs := listResp["runs"].([]any)
+	if len(runs) != 1 {
+		t.Fatalf("expected 1 run, got %d", len(runs))
+	}
+}
+
+func TestAPIKeyCRUD(t *testing.T) {
+	store, a, cleanup := setupTest(t)
+	defer cleanup()
+
+	hub := ws.NewHub()
+	r := runner.New(store, hub, 1)
+	app := NewRouter(store, a, newTestEncryptor(t), r, hub)
+
+	token := registerUser(t, app, "keys@test.com", "Key User", "pass123")
+
+	// Create API key
+	body := `{"provider":"openai","label":"My OpenAI Key","key":"sk-test-1234567890","is_default":true}`
+	req := httptest.NewRequest("POST", "/api/v1/api-keys", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 201 {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("create key: expected 201, got %d: %s", resp.StatusCode, b)
+	}
+
+	var keyResp map[string]any
+	json.NewDecoder(resp.Body).Decode(&keyResp)
+
+	if keyResp["key_hint"] != "...7890" {
+		t.Fatalf("expected hint ...7890, got %v", keyResp["key_hint"])
+	}
+	if keyResp["provider"] != "openai" {
+		t.Fatalf("expected provider openai, got %v", keyResp["provider"])
+	}
+	keyID := keyResp["id"].(string)
+
+	// List API keys (should NOT contain the actual key)
+	req = httptest.NewRequest("GET", "/api/v1/api-keys", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, _ = app.Test(req)
+
+	var listResp map[string]any
+	json.NewDecoder(resp.Body).Decode(&listResp)
+	keys := listResp["api_keys"].([]any)
+	if len(keys) != 1 {
+		t.Fatalf("expected 1 key, got %d", len(keys))
+	}
+
+	// Delete
+	req = httptest.NewRequest("DELETE", "/api/v1/api-keys/"+keyID, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, _ = app.Test(req)
+	if resp.StatusCode != 200 {
+		t.Fatalf("delete key: expected 200, got %d", resp.StatusCode)
+	}
+
+	// Verify deleted
+	req = httptest.NewRequest("GET", "/api/v1/api-keys", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, _ = app.Test(req)
+	json.NewDecoder(resp.Body).Decode(&listResp)
+	keys = listResp["api_keys"].([]any)
+	if len(keys) != 0 {
+		t.Fatalf("expected 0 keys after delete, got %d", len(keys))
 	}
 }
 

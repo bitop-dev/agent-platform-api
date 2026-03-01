@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/bitop-dev/agent-platform-api/internal/api/middleware"
+	"github.com/bitop-dev/agent-platform-api/internal/auth"
 	"github.com/bitop-dev/agent-platform-api/internal/db"
 	"github.com/bitop-dev/agent-platform-api/internal/db/sqlc"
 	"github.com/bitop-dev/agent-platform-api/internal/runner"
@@ -16,12 +17,13 @@ import (
 
 // RunHandler handles run creation and listing.
 type RunHandler struct {
-	store  *db.Store
-	runner *runner.Runner
+	store     *db.Store
+	runner    *runner.Runner
+	encryptor *auth.Encryptor
 }
 
-func NewRunHandler(store *db.Store, r *runner.Runner) *RunHandler {
-	return &RunHandler{store: store, runner: r}
+func NewRunHandler(store *db.Store, r *runner.Runner, enc *auth.Encryptor) *RunHandler {
+	return &RunHandler{store: store, runner: r, encryptor: enc}
 }
 
 type createRunRequest struct {
@@ -63,6 +65,18 @@ func (h *RunHandler) Create(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create run"})
 	}
 
+	// Look up user's API key for this provider
+	var apiKey string
+	dbKey, err := h.store.GetDefaultAPIKey(c.Context(), sqlc.GetDefaultAPIKeyParams{
+		UserID:   userID,
+		Provider: agent.ModelProvider,
+	})
+	if err == nil {
+		if decrypted, err := h.encryptor.Decrypt(dbKey.KeyEnc); err == nil {
+			apiKey = decrypted
+		}
+	}
+
 	// Dispatch to runner (async)
 	h.runner.Enqueue(runner.RunRequest{
 		RunID:    run.ID,
@@ -71,6 +85,7 @@ func (h *RunHandler) Create(c *fiber.Ctx) error {
 		Provider: agent.ModelProvider,
 		Model:    agent.ModelName,
 		Config:   agent.ConfigYaml,
+		APIKey:   apiKey,
 	})
 
 	return c.Status(fiber.StatusAccepted).JSON(run)

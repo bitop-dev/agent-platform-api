@@ -17,7 +17,7 @@ import (
 )
 
 // NewRouter creates the Fiber app with all routes configured.
-func NewRouter(store *db.Store, a *auth.Auth, r *runner.Runner, hub *ws.Hub) *fiber.App {
+func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Runner, hub *ws.Hub) *fiber.App {
 	app := fiber.New(fiber.Config{
 		AppName:      "agent-platform-api",
 		ErrorHandler: errorHandler,
@@ -52,8 +52,14 @@ func NewRouter(store *db.Store, a *auth.Auth, r *runner.Runner, hub *ws.Hub) *fi
 	api.Put("/agents/:id", agentHandler.Update)
 	api.Delete("/agents/:id", agentHandler.Delete)
 
+	// API Keys
+	apiKeyHandler := handlers.NewAPIKeyHandler(store, enc)
+	api.Post("/api-keys", apiKeyHandler.Create)
+	api.Get("/api-keys", apiKeyHandler.List)
+	api.Delete("/api-keys/:id", apiKeyHandler.Delete)
+
 	// Runs
-	runHandler := handlers.NewRunHandler(store, r)
+	runHandler := handlers.NewRunHandler(store, r, enc)
 	api.Post("/runs", runHandler.Create)
 	api.Get("/runs/:id", runHandler.Get)
 	api.Get("/agents/:agent_id/runs", runHandler.List)
