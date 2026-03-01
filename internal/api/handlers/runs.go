@@ -29,6 +29,7 @@ func NewRunHandler(store *db.Store, r *runner.Runner, enc *auth.Encryptor) *RunH
 type createRunRequest struct {
 	AgentID string `json:"agent_id"`
 	Mission string `json:"mission"`
+	BaseURL string `json:"base_url,omitempty"` // Optional LLM API base URL override
 }
 
 // Create queues a new run for an agent.
@@ -86,6 +87,7 @@ func (h *RunHandler) Create(c *fiber.Ctx) error {
 		Model:    agent.ModelName,
 		Config:   agent.ConfigYaml,
 		APIKey:   apiKey,
+		BaseURL:  req.BaseURL,
 	})
 
 	return c.Status(fiber.StatusAccepted).JSON(run)
