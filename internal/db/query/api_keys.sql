@@ -1,10 +1,10 @@
 -- name: CreateAPIKey :one
-INSERT INTO api_keys (id, user_id, provider, label, key_enc, key_hint, is_default)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO api_keys (id, user_id, provider, label, key_enc, key_hint, is_default, base_url)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: ListAPIKeysByUser :many
-SELECT id, user_id, provider, label, key_hint, is_default, created_at
+SELECT id, user_id, provider, label, key_hint, is_default, base_url, created_at
 FROM api_keys WHERE user_id = ? ORDER BY created_at DESC;
 
 -- name: GetAPIKey :one

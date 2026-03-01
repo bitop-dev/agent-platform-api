@@ -67,7 +67,7 @@ func (h *RunHandler) Create(c *fiber.Ctx) error {
 	}
 
 	// Look up user's API key for this provider
-	var apiKey string
+	var apiKey, baseURL string
 	dbKey, err := h.store.GetDefaultAPIKey(c.Context(), sqlc.GetDefaultAPIKeyParams{
 		UserID:   userID,
 		Provider: agent.ModelProvider,
@@ -76,6 +76,12 @@ func (h *RunHandler) Create(c *fiber.Ctx) error {
 		if decrypted, err := h.encryptor.Decrypt(dbKey.KeyEnc); err == nil {
 			apiKey = decrypted
 		}
+		baseURL = dbKey.BaseUrl
+	}
+
+	// Run request base_url overrides stored key base_url
+	if req.BaseURL != "" {
+		baseURL = req.BaseURL
 	}
 
 	// Dispatch to runner (async)
@@ -87,7 +93,7 @@ func (h *RunHandler) Create(c *fiber.Ctx) error {
 		Model:    agent.ModelName,
 		Config:   agent.ConfigYaml,
 		APIKey:   apiKey,
-		BaseURL:  req.BaseURL,
+		BaseURL:  baseURL,
 	})
 
 	return c.Status(fiber.StatusAccepted).JSON(runToDTO(run))

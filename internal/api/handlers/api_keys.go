@@ -21,10 +21,11 @@ func NewAPIKeyHandler(store *db.Store, enc *auth.Encryptor) *APIKeyHandler {
 }
 
 type createAPIKeyRequest struct {
-	Provider  string `json:"provider"`  // openai, anthropic, ollama
-	Label     string `json:"label"`     // "My OpenAI Key"
-	Key       string `json:"key"`       // The actual API key (stored encrypted)
+	Provider  string `json:"provider"`            // openai, anthropic, ollama
+	Label     string `json:"label"`               // "My OpenAI Key"
+	Key       string `json:"key"`                 // The actual API key (stored encrypted)
 	IsDefault bool   `json:"is_default"`
+	BaseURL   string `json:"base_url,omitempty"`  // Optional custom endpoint
 }
 
 // Create stores a new encrypted API key.
@@ -62,6 +63,7 @@ func (h *APIKeyHandler) Create(c *fiber.Ctx) error {
 		KeyEnc:    encrypted,
 		KeyHint:   auth.KeyHint(req.Key),
 		IsDefault: req.IsDefault,
+		BaseUrl:   req.BaseURL,
 	})
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to store key"})
@@ -74,6 +76,7 @@ func (h *APIKeyHandler) Create(c *fiber.Ctx) error {
 		"label":      apiKey.Label,
 		"key_hint":   apiKey.KeyHint,
 		"is_default": apiKey.IsDefault,
+		"base_url":   apiKey.BaseUrl,
 		"created_at": apiKey.CreatedAt,
 	})
 }

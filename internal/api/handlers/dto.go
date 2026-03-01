@@ -137,6 +137,48 @@ func recentRunsToDTOs(runs []sqlc.RecentRunsRow) []RecentRunDTO {
 	return out
 }
 
+// --- Skill ---
+
+type SkillDTO struct {
+	ID          string    `json:"id"`
+	UserID      string    `json:"user_id,omitempty"`
+	Name        string    `json:"name"`
+	Description string    `json:"description,omitempty"`
+	Tier        string    `json:"tier"`
+	Version     string    `json:"version"`
+	SkillMD     string    `json:"skill_md,omitempty"`
+	Tags        string    `json:"tags,omitempty"`
+	SourceURL   string    `json:"source_url,omitempty"`
+	Enabled     bool      `json:"enabled"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+func skillToDTO(s sqlc.Skill) SkillDTO {
+	return SkillDTO{
+		ID:          s.ID,
+		UserID:      s.UserID.String,
+		Name:        s.Name,
+		Description: s.Description,
+		Tier:        s.Tier,
+		Version:     s.Version,
+		SkillMD:     s.SkillMd,
+		Tags:        s.Tags,
+		SourceURL:   s.SourceUrl.String,
+		Enabled:     s.Enabled,
+		CreatedAt:   s.CreatedAt,
+		UpdatedAt:   s.UpdatedAt,
+	}
+}
+
+func skillsToDTOs(skills []sqlc.Skill) []SkillDTO {
+	out := make([]SkillDTO, len(skills))
+	for i, s := range skills {
+		out[i] = skillToDTO(s)
+	}
+	return out
+}
+
 // --- Run Event ---
 
 type RunEventDTO struct {

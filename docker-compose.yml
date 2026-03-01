@@ -1,0 +1,42 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - DATABASE_URL=sqlite://data/platform.db
+      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
+      - DEFAULT_MODEL=gpt-4o
+      - DEFAULT_PROVIDER=openai
+    volumes:
+      - api-data:/app/data
+
+  # Uncomment for PostgreSQL:
+  # api:
+  #   build: .
+  #   ports:
+  #     - "8080:8080"
+  #   depends_on:
+  #     - postgres
+  #   environment:
+  #     - PORT=8080
+  #     - DATABASE_URL=postgres://agent:agent@postgres:5432/agent_platform?sslmode=disable
+  #     - JWT_SECRET=${JWT_SECRET}
+  #     - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+  #
+  # postgres:
+  #   image: postgres:16-alpine
+  #   environment:
+  #     POSTGRES_USER: agent
+  #     POSTGRES_PASSWORD: agent
+  #     POSTGRES_DB: agent_platform
+  #   volumes:
+  #     - pg-data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+
+volumes:
+  api-data:
+  # pg-data:

@@ -1,0 +1,491 @@
+openapi: 3.1.0
+info:
+  title: Agent Platform API
+  version: 0.1.0
+  description: REST API for managing AI agents, runs, skills, and API keys.
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /api/v1/models:
+    get:
+      summary: List supported LLM models
+      parameters:
+        - name: provider
+          in: query
+          schema:
+            type: string
+            enum: [openai, anthropic, ollama]
+      responses:
+        "200":
+          description: List of models
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  models:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Model"
+
+  /api/v1/auth/register:
+    post:
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, name, password]
+              properties:
+                email: { type: string, format: email }
+                name: { type: string }
+                password: { type: string, minLength: 6 }
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+
+  /api/v1/auth/login:
+    post:
+      summary: Authenticate user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+
+  /api/v1/auth/refresh:
+    post:
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token: { type: string }
+      responses:
+        "200":
+          description: New access token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+
+  /api/v1/me:
+    get:
+      summary: Get current user info
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: User info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /api/v1/dashboard:
+    get:
+      summary: Dashboard stats
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Aggregate stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agents: { type: integer }
+                  total_runs: { type: integer }
+                  run_status: { type: object }
+                  recent_runs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Run"
+
+  /api/v1/agents:
+    get:
+      summary: List agents
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Agent list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agents:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Agent"
+    post:
+      summary: Create agent
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, system_prompt, model_name]
+              properties:
+                name: { type: string }
+                description: { type: string }
+                system_prompt: { type: string }
+                model_provider: { type: string, default: openai }
+                model_name: { type: string }
+                config_yaml: { type: string }
+                max_turns: { type: integer, default: 20 }
+                timeout_seconds: { type: integer, default: 300 }
+      responses:
+        "201":
+          description: Agent created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+
+  /api/v1/agents/{id}:
+    get:
+      summary: Get agent
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+    put:
+      summary: Update agent
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Agent"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+    delete:
+      summary: Delete agent
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+
+  /api/v1/runs:
+    post:
+      summary: Start a run
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_id, mission]
+              properties:
+                agent_id: { type: string }
+                mission: { type: string }
+                base_url: { type: string }
+      responses:
+        "202":
+          description: Run queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+
+  /api/v1/runs/{id}:
+    get:
+      summary: Get run
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+
+  /api/v1/runs/{id}/cancel:
+    post:
+      summary: Cancel run
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+
+  /api/v1/runs/{id}/events:
+    get:
+      summary: Get run events
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RunEvent"
+
+  /api/v1/api-keys:
+    post:
+      summary: Store LLM API key
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, label, key]
+              properties:
+                provider: { type: string }
+                label: { type: string }
+                key: { type: string }
+                is_default: { type: boolean }
+                base_url: { type: string }
+      responses:
+        "201":
+          description: Key stored
+    get:
+      summary: List API keys (hints only)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  api_keys: { type: array }
+
+  /api/v1/skills:
+    get:
+      summary: List skills
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: tier
+          in: query
+          schema:
+            type: string
+            enum: [bundled, workspace, community]
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  skills:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Skill"
+    post:
+      summary: Create skill
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                description: { type: string }
+                tier: { type: string, default: workspace }
+                skill_md: { type: string }
+                tags: { type: string }
+                source_url: { type: string }
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Skill"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        email: { type: string }
+        name: { type: string }
+        created_at: { type: string, format: date-time }
+
+    TokenResponse:
+      type: object
+      properties:
+        token: { type: string }
+        refresh_token: { type: string }
+        user:
+          $ref: "#/components/schemas/User"
+
+    Agent:
+      type: object
+      properties:
+        id: { type: string }
+        user_id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        system_prompt: { type: string }
+        model_provider: { type: string }
+        model_name: { type: string }
+        config_yaml: { type: string }
+        max_turns: { type: integer }
+        timeout_seconds: { type: integer }
+        enabled: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    Run:
+      type: object
+      properties:
+        id: { type: string }
+        agent_id: { type: string }
+        mission: { type: string }
+        model_provider: { type: string }
+        model_name: { type: string }
+        status: { type: string, enum: [queued, running, succeeded, failed, cancelled] }
+        output_text: { type: string }
+        error_message: { type: string }
+        total_turns: { type: integer }
+        input_tokens: { type: integer }
+        output_tokens: { type: integer }
+        cost_usd: { type: number }
+        duration_ms: { type: integer }
+        created_at: { type: string, format: date-time }
+        started_at: { type: string, format: date-time }
+        completed_at: { type: string, format: date-time }
+
+    RunEvent:
+      type: object
+      properties:
+        id: { type: integer }
+        run_id: { type: string }
+        seq: { type: integer }
+        event_type: { type: string }
+        data: { type: string }
+        occurred_at: { type: string, format: date-time }
+
+    Skill:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        tier: { type: string }
+        version: { type: string }
+        skill_md: { type: string }
+        tags: { type: string }
+        source_url: { type: string }
+        enabled: { type: boolean }
+        created_at: { type: string, format: date-time }
+
+    Model:
+      type: object
+      properties:
+        id: { type: string }
+        provider: { type: string }
+        display_name: { type: string }
+        context_window: { type: integer }
+        input_cost_per_1m: { type: number }
+        output_cost_per_1m: { type: number }
+        supports_tools: { type: boolean }
+        is_reasoning: { type: boolean }

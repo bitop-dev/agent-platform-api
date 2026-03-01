@@ -141,6 +141,71 @@ func TestRegisterAndLogin(t *testing.T) {
 	}
 }
 
+func TestRefreshToken(t *testing.T) {
+	store, a, cleanup := setupTest(t)
+	defer cleanup()
+
+	hub := ws.NewHub()
+	r := runner.New(store, hub, 1)
+	app := NewRouter(store, a, newTestEncryptor(t), r, hub)
+
+	// Register — should get both tokens
+	body := `{"email":"refresh@test.com","name":"Refresh","password":"pass123"}`
+	req := httptest.NewRequest("POST", "/api/v1/auth/register", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ := app.Test(req)
+
+	var regResp map[string]any
+	json.NewDecoder(resp.Body).Decode(&regResp)
+	refreshToken := regResp["refresh_token"].(string)
+	if refreshToken == "" {
+		t.Fatal("expected refresh_token in register response")
+	}
+
+	// Use refresh token to get new access token
+	body = `{"refresh_token":"` + refreshToken + `"}`
+	req = httptest.NewRequest("POST", "/api/v1/auth/refresh", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ = app.Test(req)
+	if resp.StatusCode != 200 {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("refresh: expected 200, got %d: %s", resp.StatusCode, b)
+	}
+
+	var refreshResp map[string]any
+	json.NewDecoder(resp.Body).Decode(&refreshResp)
+	newToken := refreshResp["token"].(string)
+	if newToken == "" {
+		t.Fatal("expected new access token from refresh")
+	}
+
+	// New access token should work on protected routes
+	req = httptest.NewRequest("GET", "/api/v1/me", nil)
+	req.Header.Set("Authorization", "Bearer "+newToken)
+	resp, _ = app.Test(req)
+	if resp.StatusCode != 200 {
+		t.Fatalf("new token on /me: expected 200, got %d", resp.StatusCode)
+	}
+
+	// Refresh token should NOT work as access token
+	req = httptest.NewRequest("GET", "/api/v1/me", nil)
+	req.Header.Set("Authorization", "Bearer "+refreshToken)
+	resp, _ = app.Test(req)
+	if resp.StatusCode != 401 {
+		t.Fatalf("refresh token on /me: expected 401, got %d", resp.StatusCode)
+	}
+
+	// Access token should NOT work as refresh token
+	accessToken := regResp["token"].(string)
+	body = `{"refresh_token":"` + accessToken + `"}`
+	req = httptest.NewRequest("POST", "/api/v1/auth/refresh", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ = app.Test(req)
+	if resp.StatusCode != 401 {
+		t.Fatalf("access token as refresh: expected 401, got %d", resp.StatusCode)
+	}
+}
+
 func TestAgentCRUD(t *testing.T) {
 	store, a, cleanup := setupTest(t)
 	defer cleanup()

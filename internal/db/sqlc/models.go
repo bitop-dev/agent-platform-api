@@ -25,6 +25,13 @@ type Agent struct {
 	UpdatedAt      time.Time      `json:"updated_at"`
 }
 
+type AgentSkill struct {
+	AgentID    string         `json:"agent_id"`
+	SkillID    string         `json:"skill_id"`
+	Position   int64          `json:"position"`
+	ConfigJson sql.NullString `json:"config_json"`
+}
+
 type ApiKey struct {
 	ID        string    `json:"id"`
 	UserID    string    `json:"user_id"`
@@ -33,6 +40,7 @@ type ApiKey struct {
 	KeyEnc    []byte    `json:"key_enc"`
 	KeyHint   string    `json:"key_hint"`
 	IsDefault bool      `json:"is_default"`
+	BaseUrl   string    `json:"base_url"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -62,6 +70,21 @@ type RunEvent struct {
 	EventType  string         `json:"event_type"`
 	DataJson   sql.NullString `json:"data_json"`
 	OccurredAt time.Time      `json:"occurred_at"`
+}
+
+type Skill struct {
+	ID          string         `json:"id"`
+	UserID      sql.NullString `json:"user_id"`
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Tier        string         `json:"tier"`
+	Version     string         `json:"version"`
+	SkillMd     string         `json:"skill_md"`
+	Tags        string         `json:"tags"`
+	SourceUrl   sql.NullString `json:"source_url"`
+	Enabled     bool           `json:"enabled"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
 }
 
 type User struct {

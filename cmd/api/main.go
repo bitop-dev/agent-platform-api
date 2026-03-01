@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -24,6 +24,10 @@ func main() {
 }
 
 func run() error {
+	// Structured logging
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	slog.SetDefault(logger)
+
 	// Load config
 	cfg, err := config.Load()
 	if err != nil {
@@ -41,7 +45,7 @@ func run() error {
 	if err := store.Migrate(context.Background()); err != nil {
 		return fmt.Errorf("migrate: %w", err)
 	}
-	log.Printf("database ready (%s)", store.Driver())
+	slog.Info("database ready", "driver", store.Driver())
 
 	// Auth
 	a := auth.New(cfg.JWTSecret, cfg.JWTExpiryMinutes)
@@ -52,7 +56,7 @@ func run() error {
 		return fmt.Errorf("encryption: %w", err)
 	}
 	if cfg.EncryptionKey == "" {
-		log.Println("⚠ ENCRYPTION_KEY not set — API keys stored in plaintext (dev mode)")
+		slog.Warn("ENCRYPTION_KEY not set — API keys stored in plaintext (dev mode)")
 	}
 
 	// WebSocket hub
@@ -71,11 +75,11 @@ func run() error {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		<-sigCh
-		log.Println("shutting down...")
+		slog.Info("shutting down...")
 		_ = app.Shutdown()
 	}()
 
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
-	log.Printf("listening on %s", addr)
+	slog.Info("listening", "addr", addr)
 	return app.Listen(addr)
 }

@@ -52,6 +52,7 @@ func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Run
 	authGroup := app.Group("/api/v1/auth", authLimiter.Middleware())
 	authGroup.Post("/register", authHandler.Register)
 	authGroup.Post("/login", authHandler.Login)
+	authGroup.Post("/refresh", authHandler.Refresh)
 
 	// --- Protected routes ---
 	api := app.Group("/api/v1", apiLimiter.Middleware(), middleware.AuthMiddleware(a))
@@ -88,6 +89,17 @@ func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Run
 	api.Post("/api-keys", apiKeyHandler.Create)
 	api.Get("/api-keys", apiKeyHandler.List)
 	api.Delete("/api-keys/:id", apiKeyHandler.Delete)
+
+	// Skills
+	skillHandler := handlers.NewSkillHandler(store)
+	api.Post("/skills", skillHandler.Create)
+	api.Get("/skills", skillHandler.List)
+	api.Get("/skills/:id", skillHandler.Get)
+	api.Put("/skills/:id", skillHandler.Update)
+	api.Delete("/skills/:id", skillHandler.Delete)
+	api.Post("/agents/:id/skills", skillHandler.AttachToAgent)
+	api.Delete("/agents/:id/skills/:skill_id", skillHandler.DetachFromAgent)
+	api.Get("/agents/:id/skills", skillHandler.ListAgentSkills)
 
 	// Runs
 	runHandler := handlers.NewRunHandler(store, r, enc)

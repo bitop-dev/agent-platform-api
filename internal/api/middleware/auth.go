@@ -32,6 +32,12 @@ func AuthMiddleware(a *auth.Auth) fiber.Handler {
 			})
 		}
 
+		if claims.TokenType != auth.AccessToken {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "access token required (not refresh token)",
+			})
+		}
+
 		c.Locals("user_id", claims.UserID)
 		c.Locals("email", claims.Email)
 		return c.Next()

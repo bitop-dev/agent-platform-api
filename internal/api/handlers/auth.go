@@ -33,8 +33,13 @@ type loginRequest struct {
 }
 
 type tokenResponse struct {
-	Token string `json:"token"`
-	User  any    `json:"user"`
+	Token        string `json:"token"`
+	RefreshToken string `json:"refresh_token"`
+	User         any    `json:"user"`
+}
+
+type refreshRequest struct {
+	RefreshToken string `json:"refresh_token"`
 }
 
 // Register creates a new user account.
@@ -63,13 +68,14 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "email already registered"})
 	}
 
-	token, err := h.auth.GenerateToken(user.ID, user.Email)
+	access, refresh, err := h.auth.GenerateTokenPair(user.ID, user.Email)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal error"})
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(tokenResponse{
-		Token: token,
+		Token:        access,
+		RefreshToken: refresh,
 		User: fiber.Map{
 			"id":    user.ID,
 			"email": user.Email,
@@ -94,17 +100,42 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid credentials"})
 	}
 
-	token, err := h.auth.GenerateToken(user.ID, user.Email)
+	access, refresh, err := h.auth.GenerateTokenPair(user.ID, user.Email)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal error"})
 	}
 
 	return c.JSON(tokenResponse{
-		Token: token,
+		Token:        access,
+		RefreshToken: refresh,
 		User: fiber.Map{
 			"id":    user.ID,
 			"email": user.Email,
 			"name":  user.Name,
 		},
 	})
+}
+
+// Refresh exchanges a valid refresh token for a new access token.
+func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
+	var req refreshRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+	}
+
+	claims, err := h.auth.ValidateToken(req.RefreshToken)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid refresh token"})
+	}
+
+	if claims.TokenType != auth.RefreshToken {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "not a refresh token"})
+	}
+
+	access, err := h.auth.GenerateToken(claims.UserID, claims.Email)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal error"})
+	}
+
+	return c.JSON(fiber.Map{"token": access})
 }

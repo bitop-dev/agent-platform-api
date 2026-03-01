@@ -25,9 +25,9 @@ func (q *Queries) ClearDefaultAPIKey(ctx context.Context, arg ClearDefaultAPIKey
 }
 
 const createAPIKey = `-- name: CreateAPIKey :one
-INSERT INTO api_keys (id, user_id, provider, label, key_enc, key_hint, is_default)
-VALUES (?, ?, ?, ?, ?, ?, ?)
-RETURNING id, user_id, provider, label, key_enc, key_hint, is_default, created_at
+INSERT INTO api_keys (id, user_id, provider, label, key_enc, key_hint, is_default, base_url)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, user_id, provider, label, key_enc, key_hint, is_default, base_url, created_at
 `
 
 type CreateAPIKeyParams struct {
@@ -38,6 +38,7 @@ type CreateAPIKeyParams struct {
 	KeyEnc    []byte `json:"key_enc"`
 	KeyHint   string `json:"key_hint"`
 	IsDefault bool   `json:"is_default"`
+	BaseUrl   string `json:"base_url"`
 }
 
 func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error) {
@@ -49,6 +50,7 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (Api
 		arg.KeyEnc,
 		arg.KeyHint,
 		arg.IsDefault,
+		arg.BaseUrl,
 	)
 	var i ApiKey
 	err := row.Scan(
@@ -59,6 +61,7 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (Api
 		&i.KeyEnc,
 		&i.KeyHint,
 		&i.IsDefault,
+		&i.BaseUrl,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -79,7 +82,7 @@ func (q *Queries) DeleteAPIKey(ctx context.Context, arg DeleteAPIKeyParams) erro
 }
 
 const getAPIKey = `-- name: GetAPIKey :one
-SELECT id, user_id, provider, label, key_enc, key_hint, is_default, created_at FROM api_keys WHERE id = ? AND user_id = ?
+SELECT id, user_id, provider, label, key_enc, key_hint, is_default, base_url, created_at FROM api_keys WHERE id = ? AND user_id = ?
 `
 
 type GetAPIKeyParams struct {
@@ -98,13 +101,14 @@ func (q *Queries) GetAPIKey(ctx context.Context, arg GetAPIKeyParams) (ApiKey, e
 		&i.KeyEnc,
 		&i.KeyHint,
 		&i.IsDefault,
+		&i.BaseUrl,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getDefaultAPIKey = `-- name: GetDefaultAPIKey :one
-SELECT id, user_id, provider, label, key_enc, key_hint, is_default, created_at FROM api_keys WHERE user_id = ? AND provider = ? AND is_default = true
+SELECT id, user_id, provider, label, key_enc, key_hint, is_default, base_url, created_at FROM api_keys WHERE user_id = ? AND provider = ? AND is_default = true
 `
 
 type GetDefaultAPIKeyParams struct {
@@ -123,13 +127,14 @@ func (q *Queries) GetDefaultAPIKey(ctx context.Context, arg GetDefaultAPIKeyPara
 		&i.KeyEnc,
 		&i.KeyHint,
 		&i.IsDefault,
+		&i.BaseUrl,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const listAPIKeysByUser = `-- name: ListAPIKeysByUser :many
-SELECT id, user_id, provider, label, key_hint, is_default, created_at
+SELECT id, user_id, provider, label, key_hint, is_default, base_url, created_at
 FROM api_keys WHERE user_id = ? ORDER BY created_at DESC
 `
 
@@ -140,6 +145,7 @@ type ListAPIKeysByUserRow struct {
 	Label     string    `json:"label"`
 	KeyHint   string    `json:"key_hint"`
 	IsDefault bool      `json:"is_default"`
+	BaseUrl   string    `json:"base_url"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -159,6 +165,7 @@ func (q *Queries) ListAPIKeysByUser(ctx context.Context, userID string) ([]ListA
 			&i.Label,
 			&i.KeyHint,
 			&i.IsDefault,
+			&i.BaseUrl,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err

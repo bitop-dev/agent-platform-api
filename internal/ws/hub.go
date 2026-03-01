@@ -3,7 +3,7 @@ package ws
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"sync"
 
 	"github.com/gofiber/contrib/websocket"
@@ -64,13 +64,13 @@ func (h *Hub) Broadcast(runID string, event Event) {
 
 	data, err := json.Marshal(event)
 	if err != nil {
-		log.Printf("[ws] marshal error: %v", err)
+		slog.Warn("ws marshal error", "error", err)
 		return
 	}
 
 	for conn := range room {
 		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-			log.Printf("[ws] write error: %v", err)
+			slog.Warn("ws write error", "error", err)
 			// Connection will be cleaned up by the handler
 		}
 	}

@@ -7,7 +7,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -62,7 +62,7 @@ func (r *Runner) Start() {
 		r.wg.Add(1)
 		go r.worker(i)
 	}
-	log.Printf("[runner] started %d workers", r.workers)
+	slog.Info("runner started", "workers", r.workers)
 }
 
 // Stop waits for all workers to finish.

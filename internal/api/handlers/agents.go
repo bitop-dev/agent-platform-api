@@ -156,7 +156,11 @@ func (h *AgentHandler) Update(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update agent"})
 	}
 
-	return c.JSON(fiber.Map{"status": "updated"})
+	updated, err := h.store.GetAgent(c.Context(), agentID)
+	if err != nil {
+		return c.JSON(fiber.Map{"status": "updated"})
+	}
+	return c.JSON(agentToDTO(updated))
 }
 
 // Delete removes an agent.
