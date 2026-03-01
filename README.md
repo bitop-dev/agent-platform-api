@@ -2,7 +2,7 @@
 
 Go REST API server for the Agent Platform. Wraps [agent-core](https://github.com/bitop-dev/agent-core) with persistence, authentication, and real-time WebSocket streaming.
 
-> **Status**: Phase 2 — foundation scaffolding. Auth, agent CRUD, and run execution working. 9 tests passing.
+> **Status**: Phase 2 — API foundation complete. Auth, agent CRUD, runs, API keys, rate limiting. 18 tests passing.
 
 ## Quick Start
 
@@ -29,6 +29,7 @@ PORT=8090 DATABASE_URL=sqlite://data/platform.db JWT_SECRET=mysecret ./bin/api
 ### Protected (Bearer token required)
 | Method | Path | Description |
 |--------|------|-------------|
+| GET | `/api/v1/me` | Current user info |
 | GET | `/api/v1/agents` | List user's agents |
 | POST | `/api/v1/agents` | Create agent |
 | GET | `/api/v1/agents/:id` | Get agent details |
@@ -38,6 +39,10 @@ PORT=8090 DATABASE_URL=sqlite://data/platform.db JWT_SECRET=mysecret ./bin/api
 | GET | `/api/v1/runs/:id` | Get run status/result |
 | GET | `/api/v1/agents/:agent_id/runs` | List runs for agent |
 | GET | `/api/v1/runs/:id/events` | Get run event log |
+| POST | `/api/v1/runs/:id/cancel` | Cancel an in-flight run |
+| POST | `/api/v1/api-keys` | Store encrypted LLM API key |
+| GET | `/api/v1/api-keys` | List API keys (hints only) |
+| DELETE | `/api/v1/api-keys/:id` | Delete API key |
 
 ### WebSocket
 | Path | Description |

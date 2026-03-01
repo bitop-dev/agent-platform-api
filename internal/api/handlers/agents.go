@@ -5,6 +5,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"gopkg.in/yaml.v3"
 
 	"github.com/bitop-dev/agent-platform-api/internal/api/middleware"
 	"github.com/bitop-dev/agent-platform-api/internal/db"
@@ -53,6 +54,14 @@ func (h *AgentHandler) Create(c *fiber.Ctx) error {
 
 	if req.Name == "" || req.SystemPrompt == "" || req.ModelName == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "name, system_prompt, and model_name are required"})
+	}
+
+	// Validate config_yaml if provided
+	if req.ConfigYAML != "" {
+		var check map[string]any
+		if err := yaml.Unmarshal([]byte(req.ConfigYAML), &check); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid config_yaml: " + err.Error()})
+		}
 	}
 
 	if req.ModelProvider == "" {

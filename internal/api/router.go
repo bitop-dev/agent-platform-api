@@ -2,6 +2,8 @@
 package api
 
 import (
+	"time"
+
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -25,10 +27,13 @@ func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Run
 
 	// Global middleware
 	app.Use(recover.New())
-	app.Use(fiberlogger.New())
+	app.Use(middleware.RequestID())
+	app.Use(fiberlogger.New(fiberlogger.Config{
+		Format: "${time} | ${status} | ${latency} | ${ip} | ${method} | ${path} | ${locals:request_id}\n",
+	}))
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: "*",
-		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-Request-ID",
 	}))
 
 	// Health check
@@ -36,13 +41,33 @@ func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Run
 		return c.JSON(fiber.Map{"status": "ok"})
 	})
 
+	// Rate limiters
+	authLimiter := middleware.NewRateLimiter(10, time.Minute)   // 10 auth attempts/min
+	apiLimiter := middleware.NewRateLimiter(120, time.Minute)   // 120 API calls/min
+
 	// --- Public routes ---
 	authHandler := handlers.NewAuthHandler(store, a)
-	app.Post("/api/v1/auth/register", authHandler.Register)
-	app.Post("/api/v1/auth/login", authHandler.Login)
+	authGroup := app.Group("/api/v1/auth", authLimiter.Middleware())
+	authGroup.Post("/register", authHandler.Register)
+	authGroup.Post("/login", authHandler.Login)
 
 	// --- Protected routes ---
-	api := app.Group("/api/v1", middleware.AuthMiddleware(a))
+	api := app.Group("/api/v1", apiLimiter.Middleware(), middleware.AuthMiddleware(a))
+
+	// User info
+	api.Get("/me", func(c *fiber.Ctx) error {
+		userID := middleware.GetUserID(c)
+		user, err := store.GetUserByID(c.Context(), userID)
+		if err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user not found"})
+		}
+		return c.JSON(fiber.Map{
+			"id":         user.ID,
+			"email":      user.Email,
+			"name":       user.Name,
+			"created_at": user.CreatedAt,
+		})
+	})
 
 	// Agents
 	agentHandler := handlers.NewAgentHandler(store)
@@ -64,6 +89,7 @@ func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Run
 	api.Get("/runs/:id", runHandler.Get)
 	api.Get("/agents/:agent_id/runs", runHandler.List)
 	api.Get("/runs/:id/events", runHandler.Events)
+	api.Post("/runs/:id/cancel", runHandler.Cancel)
 
 	// WebSocket — stream run events in real time
 	app.Use("/ws", func(c *fiber.Ctx) error {

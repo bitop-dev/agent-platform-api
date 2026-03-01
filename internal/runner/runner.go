@@ -33,11 +33,13 @@ type RunRequest struct {
 
 // Runner manages concurrent agent run execution.
 type Runner struct {
-	store   *db.Store
-	hub     *ws.Hub
-	queue   chan RunRequest
-	wg      sync.WaitGroup
-	workers int
+	store    *db.Store
+	hub      *ws.Hub
+	queue    chan RunRequest
+	wg       sync.WaitGroup
+	workers  int
+	mu       sync.Mutex
+	cancels  map[string]context.CancelFunc // runID → cancel
 }
 
 // New creates a runner with the given number of concurrent workers.
@@ -50,6 +52,7 @@ func New(store *db.Store, hub *ws.Hub, workers int) *Runner {
 		hub:     hub,
 		queue:   make(chan RunRequest, 100),
 		workers: workers,
+		cancels: make(map[string]context.CancelFunc),
 	}
 }
 
@@ -96,8 +99,30 @@ func makeProvider(name, apiKey, baseURL string) agentpkg.Provider {
 	}
 }
 
+// Cancel cancels an in-flight run. Returns true if the run was found and cancelled.
+func (r *Runner) Cancel(runID string) bool {
+	r.mu.Lock()
+	cancel, ok := r.cancels[runID]
+	r.mu.Unlock()
+	if ok {
+		cancel()
+	}
+	return ok
+}
+
 func (r *Runner) execute(req RunRequest) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	r.mu.Lock()
+	r.cancels[req.RunID] = cancel
+	r.mu.Unlock()
+	defer func() {
+		r.mu.Lock()
+		delete(r.cancels, req.RunID)
+		r.mu.Unlock()
+	}()
+
 	startTime := time.Now()
 
 	// Mark as running
@@ -187,8 +212,14 @@ func (r *Runner) execute(req RunRequest) {
 
 	duration := time.Since(startTime).Milliseconds()
 
+	// Check if cancelled
+	finalStatus := "succeeded"
+	if ctx.Err() != nil {
+		finalStatus = "cancelled"
+	}
+
 	_ = r.store.UpdateRunResult(ctx, sqlc.UpdateRunResultParams{
-		Status:       "succeeded",
+		Status:       finalStatus,
 		OutputText:   sql.NullString{String: outputText, Valid: true},
 		TotalTurns:   sql.NullInt64{Int64: int64(totalTurns), Valid: true},
 		InputTokens:  sql.NullInt64{Int64: int64(inputTokens), Valid: true},
@@ -198,7 +229,7 @@ func (r *Runner) execute(req RunRequest) {
 		ID:           req.RunID,
 	})
 
-	r.broadcast(req.RunID, "status", map[string]string{"status": "succeeded"})
+	r.broadcast(req.RunID, "status", map[string]string{"status": finalStatus})
 }
 
 func (r *Runner) failRun(ctx context.Context, runID string, startTime time.Time, errMsg string) {

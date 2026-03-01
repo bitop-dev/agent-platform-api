@@ -162,7 +162,35 @@ func (h *RunHandler) Events(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"events": events})
 }
 
-// nowSQL returns current time as sql.NullTime.
-func nowSQL() sql.NullTime {
-	return sql.NullTime{Time: time.Now(), Valid: true}
+// Cancel cancels an in-flight run.
+func (h *RunHandler) Cancel(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+	runID := c.Params("id")
+
+	run, err := h.store.GetRun(c.Context(), runID)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "run not found"})
+	}
+
+	agent, err := h.store.GetAgent(c.Context(), run.AgentID)
+	if err != nil || agent.UserID != userID {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "access denied"})
+	}
+
+	if run.Status != "running" && run.Status != "queued" {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "run is not active"})
+	}
+
+	if h.runner.Cancel(runID) {
+		return c.JSON(fiber.Map{"status": "cancelling"})
+	}
+
+	// Not in runner (maybe still queued) — mark directly
+	_ = h.store.UpdateRunResult(c.Context(), sqlc.UpdateRunResultParams{
+		Status:      "cancelled",
+		CompletedAt: sql.NullTime{Time: time.Now(), Valid: true},
+		ID:          runID,
+	})
+
+	return c.JSON(fiber.Map{"status": "cancelled"})
 }

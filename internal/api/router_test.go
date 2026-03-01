@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http/httptest"
 	"os"
@@ -412,6 +413,89 @@ func TestAPIKeyCRUD(t *testing.T) {
 	keys = listResp["api_keys"].([]any)
 	if len(keys) != 0 {
 		t.Fatalf("expected 0 keys after delete, got %d", len(keys))
+	}
+}
+
+func TestRateLimiting(t *testing.T) {
+	store, a, cleanup := setupTest(t)
+	defer cleanup()
+
+	hub := ws.NewHub()
+	r := runner.New(store, hub, 1)
+	app := NewRouter(store, a, newTestEncryptor(t), r, hub)
+
+	// Auth rate limit is 10/min — send 11 requests
+	for i := range 10 {
+		body := `{"email":"rl` + fmt.Sprintf("%d", i) + `@test.com","name":"RL","password":"pass"}`
+		req := httptest.NewRequest("POST", "/api/v1/auth/register", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		resp, _ := app.Test(req)
+		if resp.StatusCode == 429 {
+			t.Fatalf("hit rate limit too early at request %d", i+1)
+		}
+	}
+
+	// 11th should be rate limited
+	req := httptest.NewRequest("POST", "/api/v1/auth/register", strings.NewReader(`{"email":"rl11@test.com","name":"RL","password":"pass"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ := app.Test(req)
+	if resp.StatusCode != 429 {
+		t.Fatalf("expected 429 on 11th request, got %d", resp.StatusCode)
+	}
+}
+
+func TestMeEndpoint(t *testing.T) {
+	store, a, cleanup := setupTest(t)
+	defer cleanup()
+
+	hub := ws.NewHub()
+	r := runner.New(store, hub, 1)
+	app := NewRouter(store, a, newTestEncryptor(t), r, hub)
+
+	token := registerUser(t, app, "me@test.com", "Me User", "pass123")
+
+	req := httptest.NewRequest("GET", "/api/v1/me", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var user map[string]any
+	json.NewDecoder(resp.Body).Decode(&user)
+	if user["email"] != "me@test.com" {
+		t.Fatalf("expected me@test.com, got %v", user["email"])
+	}
+	if user["name"] != "Me User" {
+		t.Fatalf("expected 'Me User', got %v", user["name"])
+	}
+}
+
+func TestRequestID(t *testing.T) {
+	store, a, cleanup := setupTest(t)
+	defer cleanup()
+
+	hub := ws.NewHub()
+	r := runner.New(store, hub, 1)
+	app := NewRouter(store, a, newTestEncryptor(t), r, hub)
+
+	// Should get a request ID back
+	req := httptest.NewRequest("GET", "/health", nil)
+	resp, _ := app.Test(req)
+	reqID := resp.Header.Get("X-Request-ID")
+	if reqID == "" {
+		t.Fatal("expected X-Request-ID header")
+	}
+
+	// Should echo back provided request ID
+	req = httptest.NewRequest("GET", "/health", nil)
+	req.Header.Set("X-Request-ID", "custom-id-123")
+	resp, _ = app.Test(req)
+	if resp.Header.Get("X-Request-ID") != "custom-id-123" {
+		t.Fatalf("expected custom-id-123, got %s", resp.Header.Get("X-Request-ID"))
 	}
 }
 
