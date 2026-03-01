@@ -199,6 +199,53 @@ func (q *Queries) ListRunsByAgent(ctx context.Context, arg ListRunsByAgentParams
 	return items, nil
 }
 
+const listRunsByUser = `-- name: ListRunsByUser :many
+SELECT r.id, r.agent_id, r.mission, r.model_provider, r.model_name, r.status, r.output_text, r.error_message, r.total_turns, r.input_tokens, r.output_tokens, r.cost_usd, r.duration_ms, r.created_at, r.started_at, r.completed_at FROM runs r
+JOIN agents a ON r.agent_id = a.id
+WHERE a.user_id = ?
+ORDER BY r.created_at DESC LIMIT 100
+`
+
+func (q *Queries) ListRunsByUser(ctx context.Context, userID string) ([]Run, error) {
+	rows, err := q.db.QueryContext(ctx, listRunsByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Run{}
+	for rows.Next() {
+		var i Run
+		if err := rows.Scan(
+			&i.ID,
+			&i.AgentID,
+			&i.Mission,
+			&i.ModelProvider,
+			&i.ModelName,
+			&i.Status,
+			&i.OutputText,
+			&i.ErrorMessage,
+			&i.TotalTurns,
+			&i.InputTokens,
+			&i.OutputTokens,
+			&i.CostUsd,
+			&i.DurationMs,
+			&i.CreatedAt,
+			&i.StartedAt,
+			&i.CompletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateRunResult = `-- name: UpdateRunResult :exec
 UPDATE runs
 SET status = ?, output_text = ?, error_message = ?,

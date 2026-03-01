@@ -6,6 +6,12 @@ RETURNING *;
 -- name: GetRun :one
 SELECT * FROM runs WHERE id = ?;
 
+-- name: ListRunsByUser :many
+SELECT r.* FROM runs r
+JOIN agents a ON r.agent_id = a.id
+WHERE a.user_id = ?
+ORDER BY r.created_at DESC LIMIT 100;
+
 -- name: ListRunsByAgent :many
 SELECT * FROM runs WHERE agent_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?;
 

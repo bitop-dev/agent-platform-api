@@ -104,8 +104,9 @@ func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Run
 	// Runs
 	runHandler := handlers.NewRunHandler(store, r, enc)
 	api.Post("/runs", runHandler.Create)
+	api.Get("/runs", runHandler.List)
 	api.Get("/runs/:id", runHandler.Get)
-	api.Get("/agents/:agent_id/runs", runHandler.List)
+	api.Get("/agents/:agent_id/runs", runHandler.ListByAgent)
 	api.Get("/runs/:id/events", runHandler.Events)
 	api.Post("/runs/:id/cancel", runHandler.Cancel)
 

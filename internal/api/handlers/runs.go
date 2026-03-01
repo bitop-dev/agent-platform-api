@@ -99,6 +99,22 @@ func (h *RunHandler) Create(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusAccepted).JSON(runToDTO(run))
 }
 
+// List returns all runs for the current user.
+func (h *RunHandler) List(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+
+	runs, err := h.store.ListRunsByUser(c.Context(), userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list runs"})
+	}
+
+	dtos := make([]RunDTO, len(runs))
+	for i, r := range runs {
+		dtos[i] = runToDTO(r)
+	}
+	return c.JSON(fiber.Map{"runs": dtos})
+}
+
 // Get returns a single run.
 func (h *RunHandler) Get(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
@@ -119,7 +135,8 @@ func (h *RunHandler) Get(c *fiber.Ctx) error {
 }
 
 // List returns runs for an agent.
-func (h *RunHandler) List(c *fiber.Ctx) error {
+// ListByAgent returns runs for a specific agent.
+func (h *RunHandler) ListByAgent(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 	agentID := c.Params("agent_id")
 
