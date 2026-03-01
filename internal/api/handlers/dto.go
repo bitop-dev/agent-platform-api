@@ -57,6 +57,8 @@ func agentsToDTOs(agents []sqlc.Agent) []AgentDTO {
 type RunDTO struct {
 	ID            string     `json:"id"`
 	AgentID       string     `json:"agent_id"`
+	ParentRunID   string     `json:"parent_run_id,omitempty"`
+	Depth         int        `json:"depth"`
 	Mission       string     `json:"mission"`
 	ModelProvider string     `json:"model_provider"`
 	ModelName     string     `json:"model_name"`
@@ -77,6 +79,8 @@ func runToDTO(r sqlc.Run) RunDTO {
 	dto := RunDTO{
 		ID:            r.ID,
 		AgentID:       r.AgentID,
+		ParentRunID:   r.ParentRunID.String,
+		Depth:         int(r.Depth),
 		Mission:       r.Mission,
 		ModelProvider: r.ModelProvider,
 		ModelName:     r.ModelName,
@@ -117,7 +121,8 @@ type RecentRunDTO struct {
 func recentRunToDTO(r sqlc.RecentRunsRow) RecentRunDTO {
 	return RecentRunDTO{
 		RunDTO: runToDTO(sqlc.Run{
-			ID: r.ID, AgentID: r.AgentID, Mission: r.Mission,
+			ID: r.ID, AgentID: r.AgentID, ParentRunID: r.ParentRunID,
+			Depth: r.Depth, Mission: r.Mission,
 			ModelProvider: r.ModelProvider, ModelName: r.ModelName,
 			Status: r.Status, OutputText: r.OutputText, ErrorMessage: r.ErrorMessage,
 			TotalTurns: r.TotalTurns, InputTokens: r.InputTokens,

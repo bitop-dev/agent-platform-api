@@ -3,8 +3,39 @@ CREATE TABLE users (
     email       TEXT UNIQUE NOT NULL,
     name        TEXT NOT NULL,
     password_hash TEXT,
+    avatar_url  TEXT,
+    oauth_provider TEXT,
+    oauth_id    TEXT,
     created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE teams (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    slug        TEXT UNIQUE NOT NULL,
+    owner_id    TEXT NOT NULL REFERENCES users(id),
+    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE team_members (
+    team_id     TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role        TEXT NOT NULL DEFAULT 'member',
+    joined_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (team_id, user_id)
+);
+
+CREATE TABLE team_invitations (
+    id          TEXT PRIMARY KEY,
+    team_id     TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    email       TEXT NOT NULL,
+    role        TEXT NOT NULL DEFAULT 'member',
+    invited_by  TEXT NOT NULL REFERENCES users(id),
+    status      TEXT NOT NULL DEFAULT 'pending',
+    expires_at  TIMESTAMP NOT NULL,
+    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE api_keys (
@@ -22,6 +53,7 @@ CREATE TABLE api_keys (
 CREATE TABLE agents (
     id              TEXT PRIMARY KEY,
     user_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    team_id         TEXT REFERENCES teams(id),
     name            TEXT NOT NULL,
     description     TEXT,
     system_prompt   TEXT NOT NULL,
@@ -38,6 +70,9 @@ CREATE TABLE agents (
 CREATE TABLE runs (
     id              TEXT PRIMARY KEY,
     agent_id        TEXT NOT NULL REFERENCES agents(id),
+    team_id         TEXT REFERENCES teams(id),
+    parent_run_id   TEXT REFERENCES runs(id),
+    depth           INTEGER NOT NULL DEFAULT 0,
     mission         TEXT NOT NULL,
     model_provider  TEXT NOT NULL,
     model_name      TEXT NOT NULL,
@@ -123,4 +158,14 @@ CREATE TABLE schedules (
     consecutive_errors INTEGER NOT NULL DEFAULT 0,
     created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE audit_log (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     TEXT REFERENCES users(id),
+    action      TEXT NOT NULL,
+    resource_id TEXT,
+    metadata    TEXT,
+    ip_address  TEXT,
+    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

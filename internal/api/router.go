@@ -38,10 +38,12 @@ func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Run
 		AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-Request-ID",
 	}))
 
-	// Health check
-	app.Get("/health", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"status": "ok"})
-	})
+	// Health / Readiness / Metrics (unauthenticated)
+	healthHandler := handlers.NewHealthHandler(store)
+	app.Get("/health", healthHandler.Healthz)
+	app.Get("/healthz", healthHandler.Healthz)
+	app.Get("/readyz", healthHandler.Readyz)
+	app.Get("/metrics", healthHandler.Metrics)
 
 	// Rate limiters
 	authLimiter := middleware.NewRateLimiter(10, time.Minute)   // 10 auth attempts/min
@@ -131,6 +133,20 @@ func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Run
 	api.Post("/schedules/:id/disable", schedHandler.Disable)
 	api.Post("/schedules/:id/trigger", schedHandler.Trigger)
 	api.Get("/agents/:agent_id/schedules", schedHandler.ListByAgent)
+
+	// Teams
+	teamHandler := handlers.NewTeamHandler(store)
+	api.Post("/teams", teamHandler.Create)
+	api.Get("/teams", teamHandler.List)
+	api.Get("/teams/:id", teamHandler.Get)
+	api.Delete("/teams/:id", teamHandler.Delete)
+	api.Get("/teams/:id/members", teamHandler.ListMembers)
+	api.Post("/teams/:id/invitations", teamHandler.Invite)
+	api.Post("/invitations/:invitation_id/accept", teamHandler.AcceptInvitation)
+	api.Delete("/teams/:id/members/:user_id", teamHandler.RemoveMember)
+
+	// Child runs (orchestration)
+	api.Get("/runs/:id/children", runHandler.ListChildren)
 
 	// WebSocket — stream run events in real time
 	app.Use("/ws", func(c *fiber.Ctx) error {

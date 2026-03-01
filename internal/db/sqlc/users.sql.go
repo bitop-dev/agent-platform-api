@@ -13,7 +13,7 @@ import (
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (id, email, name, password_hash)
 VALUES (?, ?, ?, ?)
-RETURNING id, email, name, password_hash, created_at, updated_at
+RETURNING id, email, name, password_hash, avatar_url, oauth_provider, oauth_id, created_at, updated_at
 `
 
 type CreateUserParams struct {
@@ -36,6 +36,9 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Email,
 		&i.Name,
 		&i.PasswordHash,
+		&i.AvatarUrl,
+		&i.OauthProvider,
+		&i.OauthID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -52,7 +55,7 @@ func (q *Queries) DeleteUser(ctx context.Context, id string) error {
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, name, password_hash, created_at, updated_at FROM users WHERE email = ?
+SELECT id, email, name, password_hash, avatar_url, oauth_provider, oauth_id, created_at, updated_at FROM users WHERE email = ?
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -63,6 +66,9 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Email,
 		&i.Name,
 		&i.PasswordHash,
+		&i.AvatarUrl,
+		&i.OauthProvider,
+		&i.OauthID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -70,7 +76,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, name, password_hash, created_at, updated_at FROM users WHERE id = ?
+SELECT id, email, name, password_hash, avatar_url, oauth_provider, oauth_id, created_at, updated_at FROM users WHERE id = ?
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
@@ -81,6 +87,9 @@ func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
 		&i.Email,
 		&i.Name,
 		&i.PasswordHash,
+		&i.AvatarUrl,
+		&i.OauthProvider,
+		&i.OauthID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

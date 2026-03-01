@@ -37,7 +37,7 @@ func (q *Queries) CountRunsByUser(ctx context.Context, userID string) (int64, er
 const createRun = `-- name: CreateRun :one
 INSERT INTO runs (id, agent_id, mission, model_provider, model_name, status)
 VALUES (?, ?, ?, ?, ?, 'queued')
-RETURNING id, agent_id, mission, model_provider, model_name, status, output_text, error_message, total_turns, input_tokens, output_tokens, cost_usd, duration_ms, created_at, started_at, completed_at
+RETURNING id, agent_id, team_id, parent_run_id, depth, mission, model_provider, model_name, status, output_text, error_message, total_turns, input_tokens, output_tokens, cost_usd, duration_ms, created_at, started_at, completed_at
 `
 
 type CreateRunParams struct {
@@ -60,6 +60,9 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, erro
 	err := row.Scan(
 		&i.ID,
 		&i.AgentID,
+		&i.TeamID,
+		&i.ParentRunID,
+		&i.Depth,
 		&i.Mission,
 		&i.ModelProvider,
 		&i.ModelName,
@@ -79,7 +82,7 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, erro
 }
 
 const getRun = `-- name: GetRun :one
-SELECT id, agent_id, mission, model_provider, model_name, status, output_text, error_message, total_turns, input_tokens, output_tokens, cost_usd, duration_ms, created_at, started_at, completed_at FROM runs WHERE id = ?
+SELECT id, agent_id, team_id, parent_run_id, depth, mission, model_provider, model_name, status, output_text, error_message, total_turns, input_tokens, output_tokens, cost_usd, duration_ms, created_at, started_at, completed_at FROM runs WHERE id = ?
 `
 
 func (q *Queries) GetRun(ctx context.Context, id string) (Run, error) {
@@ -88,6 +91,9 @@ func (q *Queries) GetRun(ctx context.Context, id string) (Run, error) {
 	err := row.Scan(
 		&i.ID,
 		&i.AgentID,
+		&i.TeamID,
+		&i.ParentRunID,
+		&i.Depth,
 		&i.Mission,
 		&i.ModelProvider,
 		&i.ModelName,
@@ -163,7 +169,7 @@ func (q *Queries) ListRunEvents(ctx context.Context, runID string) ([]RunEvent, 
 }
 
 const listRunsByAgent = `-- name: ListRunsByAgent :many
-SELECT id, agent_id, mission, model_provider, model_name, status, output_text, error_message, total_turns, input_tokens, output_tokens, cost_usd, duration_ms, created_at, started_at, completed_at FROM runs WHERE agent_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
+SELECT id, agent_id, team_id, parent_run_id, depth, mission, model_provider, model_name, status, output_text, error_message, total_turns, input_tokens, output_tokens, cost_usd, duration_ms, created_at, started_at, completed_at FROM runs WHERE agent_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
 `
 
 type ListRunsByAgentParams struct {
@@ -184,6 +190,9 @@ func (q *Queries) ListRunsByAgent(ctx context.Context, arg ListRunsByAgentParams
 		if err := rows.Scan(
 			&i.ID,
 			&i.AgentID,
+			&i.TeamID,
+			&i.ParentRunID,
+			&i.Depth,
 			&i.Mission,
 			&i.ModelProvider,
 			&i.ModelName,
@@ -213,7 +222,7 @@ func (q *Queries) ListRunsByAgent(ctx context.Context, arg ListRunsByAgentParams
 }
 
 const listRunsByUser = `-- name: ListRunsByUser :many
-SELECT r.id, r.agent_id, r.mission, r.model_provider, r.model_name, r.status, r.output_text, r.error_message, r.total_turns, r.input_tokens, r.output_tokens, r.cost_usd, r.duration_ms, r.created_at, r.started_at, r.completed_at FROM runs r
+SELECT r.id, r.agent_id, r.team_id, r.parent_run_id, r.depth, r.mission, r.model_provider, r.model_name, r.status, r.output_text, r.error_message, r.total_turns, r.input_tokens, r.output_tokens, r.cost_usd, r.duration_ms, r.created_at, r.started_at, r.completed_at FROM runs r
 JOIN agents a ON r.agent_id = a.id
 WHERE a.user_id = ?
 ORDER BY r.created_at DESC LIMIT ? OFFSET ?
@@ -237,6 +246,9 @@ func (q *Queries) ListRunsByUser(ctx context.Context, arg ListRunsByUserParams) 
 		if err := rows.Scan(
 			&i.ID,
 			&i.AgentID,
+			&i.TeamID,
+			&i.ParentRunID,
+			&i.Depth,
 			&i.Mission,
 			&i.ModelProvider,
 			&i.ModelName,
@@ -266,7 +278,7 @@ func (q *Queries) ListRunsByUser(ctx context.Context, arg ListRunsByUserParams) 
 }
 
 const listRunsByUserFiltered = `-- name: ListRunsByUserFiltered :many
-SELECT r.id, r.agent_id, r.mission, r.model_provider, r.model_name, r.status, r.output_text, r.error_message, r.total_turns, r.input_tokens, r.output_tokens, r.cost_usd, r.duration_ms, r.created_at, r.started_at, r.completed_at FROM runs r
+SELECT r.id, r.agent_id, r.team_id, r.parent_run_id, r.depth, r.mission, r.model_provider, r.model_name, r.status, r.output_text, r.error_message, r.total_turns, r.input_tokens, r.output_tokens, r.cost_usd, r.duration_ms, r.created_at, r.started_at, r.completed_at FROM runs r
 JOIN agents a ON r.agent_id = a.id
 WHERE a.user_id = ?
   AND (CAST(? AS TEXT) = '' OR r.status = CAST(? AS TEXT))
@@ -304,6 +316,9 @@ func (q *Queries) ListRunsByUserFiltered(ctx context.Context, arg ListRunsByUser
 		if err := rows.Scan(
 			&i.ID,
 			&i.AgentID,
+			&i.TeamID,
+			&i.ParentRunID,
+			&i.Depth,
 			&i.Mission,
 			&i.ModelProvider,
 			&i.ModelName,

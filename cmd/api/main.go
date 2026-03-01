@@ -89,13 +89,18 @@ func run() error {
 	// Router
 	app := api.NewRouter(store, a, enc, r, hub, syncer, sched)
 
-	// Graceful shutdown
+	// Graceful shutdown with drain period
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-		<-sigCh
-		slog.Info("shutting down...")
-		_ = app.Shutdown()
+		sig := <-sigCh
+		slog.Info("received signal, draining...", "signal", sig.String())
+		sched.Stop()
+		slog.Info("scheduler stopped")
+		r.Stop()
+		slog.Info("runner drained")
+		_ = app.ShutdownWithTimeout(10 * time.Second)
+		slog.Info("server stopped")
 	}()
 
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)

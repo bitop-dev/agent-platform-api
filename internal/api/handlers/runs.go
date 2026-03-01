@@ -254,3 +254,26 @@ func (h *RunHandler) Cancel(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{"status": "cancelled"})
 }
+
+// ListChildren returns child runs (sub-agent runs) for a parent run.
+func (h *RunHandler) ListChildren(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+	runID := c.Params("id")
+
+	run, err := h.store.GetRun(c.Context(), runID)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "run not found"})
+	}
+
+	agent, err := h.store.GetAgent(c.Context(), run.AgentID)
+	if err != nil || agent.UserID != userID {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "access denied"})
+	}
+
+	children, err := h.store.ListChildRuns(c.Context(), sql.NullString{String: runID, Valid: true})
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list children"})
+	}
+
+	return c.JSON(fiber.Map{"children": runsToDTOs(children)})
+}

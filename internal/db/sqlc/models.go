@@ -12,6 +12,7 @@ import (
 type Agent struct {
 	ID             string         `json:"id"`
 	UserID         string         `json:"user_id"`
+	TeamID         sql.NullString `json:"team_id"`
 	Name           string         `json:"name"`
 	Description    sql.NullString `json:"description"`
 	SystemPrompt   string         `json:"system_prompt"`
@@ -44,9 +45,22 @@ type ApiKey struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type AuditLog struct {
+	ID         int64          `json:"id"`
+	UserID     sql.NullString `json:"user_id"`
+	Action     string         `json:"action"`
+	ResourceID sql.NullString `json:"resource_id"`
+	Metadata   sql.NullString `json:"metadata"`
+	IpAddress  sql.NullString `json:"ip_address"`
+	CreatedAt  time.Time      `json:"created_at"`
+}
+
 type Run struct {
 	ID            string          `json:"id"`
 	AgentID       string          `json:"agent_id"`
+	TeamID        sql.NullString  `json:"team_id"`
+	ParentRunID   sql.NullString  `json:"parent_run_id"`
+	Depth         int64           `json:"depth"`
 	Mission       string          `json:"mission"`
 	ModelProvider string          `json:"model_provider"`
 	ModelName     string          `json:"model_name"`
@@ -126,11 +140,41 @@ type SkillSource struct {
 	UpdatedAt  time.Time      `json:"updated_at"`
 }
 
+type Team struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Slug      string    `json:"slug"`
+	OwnerID   string    `json:"owner_id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type TeamInvitation struct {
+	ID        string    `json:"id"`
+	TeamID    string    `json:"team_id"`
+	Email     string    `json:"email"`
+	Role      string    `json:"role"`
+	InvitedBy string    `json:"invited_by"`
+	Status    string    `json:"status"`
+	ExpiresAt time.Time `json:"expires_at"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type TeamMember struct {
+	TeamID   string    `json:"team_id"`
+	UserID   string    `json:"user_id"`
+	Role     string    `json:"role"`
+	JoinedAt time.Time `json:"joined_at"`
+}
+
 type User struct {
-	ID           string         `json:"id"`
-	Email        string         `json:"email"`
-	Name         string         `json:"name"`
-	PasswordHash sql.NullString `json:"password_hash"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
+	ID            string         `json:"id"`
+	Email         string         `json:"email"`
+	Name          string         `json:"name"`
+	PasswordHash  sql.NullString `json:"password_hash"`
+	AvatarUrl     sql.NullString `json:"avatar_url"`
+	OauthProvider sql.NullString `json:"oauth_provider"`
+	OauthID       sql.NullString `json:"oauth_id"`
+	CreatedAt     time.Time      `json:"created_at"`
+	UpdatedAt     time.Time      `json:"updated_at"`
 }

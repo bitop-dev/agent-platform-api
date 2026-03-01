@@ -65,7 +65,7 @@ func (q *Queries) CountSchedules(ctx context.Context, userID string) (CountSched
 }
 
 const recentRuns = `-- name: RecentRuns :many
-SELECT r.id, r.agent_id, r.mission, r.model_provider, r.model_name, r.status, r.output_text, r.error_message, r.total_turns, r.input_tokens, r.output_tokens, r.cost_usd, r.duration_ms, r.created_at, r.started_at, r.completed_at, a.name as agent_name
+SELECT r.id, r.agent_id, r.team_id, r.parent_run_id, r.depth, r.mission, r.model_provider, r.model_name, r.status, r.output_text, r.error_message, r.total_turns, r.input_tokens, r.output_tokens, r.cost_usd, r.duration_ms, r.created_at, r.started_at, r.completed_at, a.name as agent_name
 FROM runs r
 JOIN agents a ON a.id = r.agent_id
 WHERE a.user_id = ?
@@ -81,6 +81,9 @@ type RecentRunsParams struct {
 type RecentRunsRow struct {
 	ID            string          `json:"id"`
 	AgentID       string          `json:"agent_id"`
+	TeamID        sql.NullString  `json:"team_id"`
+	ParentRunID   sql.NullString  `json:"parent_run_id"`
+	Depth         int64           `json:"depth"`
 	Mission       string          `json:"mission"`
 	ModelProvider string          `json:"model_provider"`
 	ModelName     string          `json:"model_name"`
@@ -110,6 +113,9 @@ func (q *Queries) RecentRuns(ctx context.Context, arg RecentRunsParams) ([]Recen
 		if err := rows.Scan(
 			&i.ID,
 			&i.AgentID,
+			&i.TeamID,
+			&i.ParentRunID,
+			&i.Depth,
 			&i.Mission,
 			&i.ModelProvider,
 			&i.ModelName,

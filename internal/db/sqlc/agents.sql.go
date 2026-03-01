@@ -24,7 +24,7 @@ func (q *Queries) CountAgentsByUser(ctx context.Context, userID string) (int64, 
 const createAgent = `-- name: CreateAgent :one
 INSERT INTO agents (id, user_id, name, description, system_prompt, model_provider, model_name, config_yaml, max_turns, timeout_seconds)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, user_id, name, description, system_prompt, model_provider, model_name, config_yaml, max_turns, timeout_seconds, enabled, created_at, updated_at
+RETURNING id, user_id, team_id, name, description, system_prompt, model_provider, model_name, config_yaml, max_turns, timeout_seconds, enabled, created_at, updated_at
 `
 
 type CreateAgentParams struct {
@@ -57,6 +57,7 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
+		&i.TeamID,
 		&i.Name,
 		&i.Description,
 		&i.SystemPrompt,
@@ -82,7 +83,7 @@ func (q *Queries) DeleteAgent(ctx context.Context, id string) error {
 }
 
 const getAgent = `-- name: GetAgent :one
-SELECT id, user_id, name, description, system_prompt, model_provider, model_name, config_yaml, max_turns, timeout_seconds, enabled, created_at, updated_at FROM agents WHERE id = ?
+SELECT id, user_id, team_id, name, description, system_prompt, model_provider, model_name, config_yaml, max_turns, timeout_seconds, enabled, created_at, updated_at FROM agents WHERE id = ?
 `
 
 func (q *Queries) GetAgent(ctx context.Context, id string) (Agent, error) {
@@ -91,6 +92,7 @@ func (q *Queries) GetAgent(ctx context.Context, id string) (Agent, error) {
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
+		&i.TeamID,
 		&i.Name,
 		&i.Description,
 		&i.SystemPrompt,
@@ -107,7 +109,7 @@ func (q *Queries) GetAgent(ctx context.Context, id string) (Agent, error) {
 }
 
 const listAgentsByUser = `-- name: ListAgentsByUser :many
-SELECT id, user_id, name, description, system_prompt, model_provider, model_name, config_yaml, max_turns, timeout_seconds, enabled, created_at, updated_at FROM agents WHERE user_id = ? ORDER BY created_at DESC
+SELECT id, user_id, team_id, name, description, system_prompt, model_provider, model_name, config_yaml, max_turns, timeout_seconds, enabled, created_at, updated_at FROM agents WHERE user_id = ? ORDER BY created_at DESC
 `
 
 func (q *Queries) ListAgentsByUser(ctx context.Context, userID string) ([]Agent, error) {
@@ -122,6 +124,7 @@ func (q *Queries) ListAgentsByUser(ctx context.Context, userID string) ([]Agent,
 		if err := rows.Scan(
 			&i.ID,
 			&i.UserID,
+			&i.TeamID,
 			&i.Name,
 			&i.Description,
 			&i.SystemPrompt,

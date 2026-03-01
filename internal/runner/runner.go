@@ -13,6 +13,7 @@ import (
 	"time"
 
 	agentpkg "github.com/bitop-dev/agent-core/pkg/agent"
+	"github.com/bitop-dev/agent-platform-api/internal/metrics"
 
 	"github.com/bitop-dev/agent-platform-api/internal/db"
 	"github.com/bitop-dev/agent-platform-api/internal/db/sqlc"
@@ -124,6 +125,8 @@ func (r *Runner) execute(req RunRequest) {
 	}()
 
 	startTime := time.Now()
+
+	metrics.Global.RunsStarted.Add(1)
 
 	// Mark as running
 	_ = r.store.UpdateRunStatus(ctx, sqlc.UpdateRunStatusParams{
@@ -257,6 +260,8 @@ func (r *Runner) execute(req RunRequest) {
 		finalStatus = "cancelled"
 	}
 
+	metrics.Global.RunsFinished.Add(1)
+
 	_ = r.store.UpdateRunResult(ctx, sqlc.UpdateRunResultParams{
 		Status:       finalStatus,
 		OutputText:   sql.NullString{String: outputText, Valid: true},
@@ -272,6 +277,7 @@ func (r *Runner) execute(req RunRequest) {
 }
 
 func (r *Runner) failRun(ctx context.Context, runID string, startTime time.Time, errMsg string) {
+	metrics.Global.RunsFailed.Add(1)
 	duration := time.Since(startTime).Milliseconds()
 
 	_ = r.store.UpdateRunResult(ctx, sqlc.UpdateRunResultParams{
