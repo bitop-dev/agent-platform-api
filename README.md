@@ -2,7 +2,7 @@
 
 Go REST API server for the Agent Platform. Wraps [agent-core](https://github.com/bitop-dev/agent-core) with persistence, authentication, real-time WebSocket streaming, and a multi-source skill registry.
 
-> **Status**: Phase 2–9 complete — WASM sandbox runner, OAuth, audit logging, team-scoped resources, Prometheus metrics.
+> **Status**: Feature-complete. 46 Go files, ~8.6K lines, 22 tests. OAuth, audit logging, teams, schedules, Prometheus metrics.
 
 ---
 
@@ -22,18 +22,26 @@ JWT_SECRET=your-secret-32-chars-min make run
 ### Docker
 
 ```bash
+# From the agent-platform-docs (root) repo:
+docker compose up --build
+
+# Or standalone:
 docker compose up --build
 ```
 
+See [agent-platform-docs](https://github.com/bitop-dev/agent-platform-docs) for the full-stack `docker-compose.yml` that orchestrates API + Web + volumes.
+
 ---
 
-## API Endpoints
+## API Endpoints (62 routes)
 
 ### Public (no auth required)
 
 | Method | Path | Description |
 |---|---|---|
 | GET | `/health` | Health check |
+| GET | `/readyz` | Readiness probe (DB connectivity) |
+| GET | `/metrics` | Prometheus text exposition format |
 | GET | `/api/v1/models` | List supported LLM models (filter by `?provider=`) |
 
 ### Auth (rate limited: 10/min per IP)
@@ -43,23 +51,30 @@ docker compose up --build
 | POST | `/api/v1/auth/register` | Register new user → returns access + refresh tokens |
 | POST | `/api/v1/auth/login` | Login → returns access + refresh tokens |
 | POST | `/api/v1/auth/refresh` | Exchange refresh token for new access token |
+
+### OAuth
+
+| Method | Path | Description |
+|---|---|---|
 | GET | `/api/v1/auth/github` | GitHub OAuth login redirect |
-| GET | `/api/v1/auth/github/callback` | GitHub OAuth callback |
+| GET | `/api/v1/auth/github/callback` | GitHub OAuth callback → redirect with JWT |
 | GET | `/api/v1/auth/google` | Google OAuth login redirect |
-| GET | `/api/v1/auth/google/callback` | Google OAuth callback |
+| GET | `/api/v1/auth/google/callback` | Google OAuth callback → redirect with JWT |
+
+OAuth flow: server redirects to provider → callback creates/links user → redirects to `/login?token=...&refresh_token=...` → frontend stores tokens.
 
 ### Protected (Bearer token required, 120/min per IP)
 
-#### User
+#### User & Dashboard
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/v1/me` | Current user info |
+| GET | `/api/v1/me` | Current user (includes `avatar_url`, `oauth_provider`) |
 | GET | `/api/v1/dashboard` | Aggregate stats (agent count, run breakdown, recent runs) |
 
 #### Agents
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/v1/agents` | List user's agents |
+| GET | `/api/v1/agents` | List user's agents (includes team-shared) |
 | POST | `/api/v1/agents` | Create agent |
 | GET | `/api/v1/agents/:id` | Get agent details |
 | PUT | `/api/v1/agents/:id` | Update agent |
@@ -70,7 +85,7 @@ docker compose up --build
 | Method | Path | Description |
 |---|---|---|
 | POST | `/api/v1/runs` | Start a run (async, returns immediately) |
-| GET | `/api/v1/runs` | List all user's runs |
+| GET | `/api/v1/runs` | List all user's runs (includes team-shared) |
 | GET | `/api/v1/runs/:id` | Get run status, output, metrics |
 | GET | `/api/v1/agents/:agent_id/runs` | List runs for a specific agent |
 | GET | `/api/v1/runs/:id/events` | Get full event log |
@@ -80,7 +95,7 @@ docker compose up --build
 #### API Keys
 | Method | Path | Description |
 |---|---|---|
-| POST | `/api/v1/api-keys` | Store LLM API key (encrypted at rest) |
+| POST | `/api/v1/api-keys` | Store LLM API key (AES-256-GCM encrypted at rest) |
 | GET | `/api/v1/api-keys` | List keys (hints only, never full key) |
 | DELETE | `/api/v1/api-keys/:id` | Delete API key |
 
@@ -134,13 +149,6 @@ docker compose up --build
 |---|---|---|
 | GET | `/api/v1/audit-log` | Paginated audit trail (`?page=&per_page=`) |
 
-#### Observability
-| Method | Path | Description |
-|---|---|---|
-| GET | `/health` | Liveness probe |
-| GET | `/readyz` | Readiness probe (DB check) |
-| GET | `/metrics` | Prometheus text exposition format |
-
 ### WebSocket
 
 | Path | Description |
@@ -165,7 +173,7 @@ docker compose up --build
               └──────────┼──────────┘
                          │
                     ┌────▼────┐
-                    │ Handlers│
+                    │ Handlers│  ← Audit Logger (18 action types)
                     └────┬────┘
                          │
            ┌─────────┬───┼────┬──────────┐
@@ -178,6 +186,17 @@ docker compose up --build
         SQLite   agent-core  GitHub    API keys
         /Postgres pkg/agent  repos     encrypted
 ```
+
+### Run Execution (WASM Sandboxed)
+
+1. `POST /api/v1/runs` → creates DB record (status: queued) → enqueues `RunRequest`
+2. Worker goroutine picks up request → resolves API key from DB
+3. Initializes WASM sandbox registry → loads skill `.wasm` modules
+4. Calls `agent.QuickRun()` which runs the full agent loop
+5. Events written to DB (`run_events`) AND broadcast to WebSocket hub
+6. On completion: updates run record with output, metrics, status
+
+The runner uses `RegisterSkillToolsSandboxed()` from `pkg/agent` — all skill tools execute inside Wazero's WASM sandbox with capability-based security.
 
 ### Skill Registry Sync
 
@@ -194,30 +213,57 @@ curl -X POST http://localhost:8080/api/v1/skill-sources \
   -d '{"url":"github.com/mycorp/internal-skills","label":"Internal"}'
 ```
 
-### Run Execution Flow
+### Audit Logging
 
-1. `POST /api/v1/runs` → creates DB record (status: queued) → enqueues `RunRequest`
-2. Worker goroutine picks up request → resolves API key from DB → calls `agent.QuickRun()`
-3. Agent-core executes: LLM calls, tool execution, streaming events
-4. Events written to DB (`run_events`) AND broadcast to WebSocket hub
-5. On completion: updates run record with output, metrics, status
+All state-changing operations are audit-logged with 18 action types:
+
+| Category | Actions |
+|---|---|
+| **Auth** | `auth.login`, `auth.register`, `auth.oauth_login` |
+| **Agents** | `agent.create`, `agent.update`, `agent.delete` |
+| **Runs** | `run.create`, `run.cancel` |
+| **API Keys** | `api_key.create`, `api_key.delete` |
+| **Skills** | `skill.attach`, `skill.detach` |
+| **Schedules** | `schedule.create`, `schedule.delete` |
+| **Teams** | `team.create`, `team.invite`, `team.remove_member` |
+
+### Observability
+
+| Endpoint | Format | Metrics |
+|---|---|---|
+| `/health` | JSON | Liveness probe |
+| `/readyz` | JSON | Readiness (DB check) |
+| `/metrics` | Prometheus text | `agentops_runs_started_total`, `agentops_runs_finished_total`, `agentops_runs_failed_total`, `agentops_uptime_seconds`, `agentops_goroutines`, `agentops_alloc_bytes`, `agentops_gc_cycles_total` |
+
+### Graceful Shutdown
+
+On SIGINT/SIGTERM:
+1. Stop scheduler (drain pending ticks)
+2. Stop runner (drain in-flight runs with 30s timeout)
+3. Close database
+4. Shutdown Fiber server
 
 ---
 
 ## Database
 
-### Schema (4 migrations)
+### Schema (8 migrations, 13 tables)
 
 | Table | Description |
 |---|---|
-| `users` | User accounts (email, name, password hash) |
-| `api_keys` | LLM provider keys (encrypted, with base_url) |
-| `agents` | Agent configs (name, prompt, model, YAML) |
-| `runs` | Run records (status, output, metrics, timestamps) |
+| `users` | User accounts (email, name, password hash, avatar_url, oauth_provider) |
+| `teams` | Team definitions (name, owner) |
+| `team_members` | Team membership (user, role: owner/admin/member/viewer) |
+| `team_invitations` | Pending team invites (email, role, status) |
+| `api_keys` | LLM provider keys (AES-256-GCM encrypted, with base_url) |
+| `agents` | Agent configs (name, prompt, model, YAML, optional team_id) |
+| `runs` | Run records (status, output, metrics, parent_run_id for orchestration) |
 | `run_events` | Event log per run (seq, type, JSON data) |
 | `skills` | Skill registry (name, tier, SKILL.md, source tracking) |
 | `agent_skills` | Agent ↔ skill linking (ordered, with config) |
 | `skill_sources` | Registered skill repos (url, status, last synced) |
+| `schedules` | Cron/interval/one-shot schedules with overlap policy |
+| `audit_log` | Audit trail (user, action, resource, metadata, timestamp) |
 
 ### Tooling
 
@@ -239,6 +285,51 @@ curl -X POST http://localhost:8080/api/v1/skill-sources \
 | `ENCRYPTION_KEY` | (optional) | AES-256 hex key for API key encryption |
 | `DEFAULT_MODEL` | `gpt-4o` | Default model for new agents |
 | `DEFAULT_PROVIDER` | `openai` | Default provider for new agents |
+| `BASE_URL` | `http://localhost:8080` | OAuth redirect base URL |
+| `GITHUB_CLIENT_ID` | (optional) | GitHub OAuth app client ID |
+| `GITHUB_CLIENT_SECRET` | (optional) | GitHub OAuth app client secret |
+| `GOOGLE_CLIENT_ID` | (optional) | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | (optional) | Google OAuth client secret |
+
+---
+
+## Docker
+
+### Dockerfile
+
+Multi-stage build: Go 1.26 compile → scratch-like runner with non-root user and healthcheck.
+
+```dockerfile
+# Build
+FROM golang:1.26-alpine AS builder
+# ...
+# Run
+FROM alpine:3.21
+COPY --from=builder /app/api /usr/local/bin/api
+USER appuser
+HEALTHCHECK CMD wget -qO- http://localhost:8080/health || exit 1
+ENTRYPOINT ["api"]
+```
+
+### docker-compose.yml (root repo)
+
+```yaml
+services:
+  api:
+    build: ../agent-platform-api
+    ports: ["8090:8080"]
+    environment:
+      - JWT_SECRET=${JWT_SECRET}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+      # ... see .env.example
+    volumes:
+      - api-data:/data
+
+  web:
+    build: ../agent-platform-web
+    ports: ["3002:80"]
+    depends_on: [api]
+```
 
 ---
 
@@ -250,9 +341,10 @@ curl -X POST http://localhost:8080/api/v1/skill-sources \
 | Database | SQLite / PostgreSQL |
 | SQL | [sqlc](https://sqlc.dev/) — type-safe generated Go |
 | Migrations | [goose](https://github.com/pressly/goose) — embedded SQL |
-| Auth | [golang-jwt/jwt](https://github.com/golang-jwt/jwt) v5 + bcrypt |
+| Auth | [golang-jwt/jwt](https://github.com/golang-jwt/jwt) v5 + bcrypt + OAuth |
 | WebSocket | gofiber/contrib/websocket |
-| Agent Runtime | [agent-core/pkg/agent](https://github.com/bitop-dev/agent-core) |
+| Agent Runtime | [agent-core/pkg/agent](https://github.com/bitop-dev/agent-core) (WASM sandbox) |
+| Metrics | Prometheus text exposition format |
 | Logging | `log/slog` (JSON to stdout) |
 
 ---
@@ -273,10 +365,10 @@ TEST_LLM_API_KEY=sk-... TEST_LLM_BASE_URL=https://api.openai.com/v1 make test
 
 | Repo | Purpose | Status |
 |---|---|---|
-| [agent-core](https://github.com/bitop-dev/agent-core) | Standalone CLI + Go library | ✅ 111 tests, 26 commits |
-| **agent-platform-api** (this repo) | Go Fiber REST API | ✅ 22 tests, 11 commits |
-| [agent-platform-web](https://github.com/bitop-dev/agent-platform-web) | Bun + Vite + React web portal | ✅ 11 pages, 6 commits |
-| [agent-platform-skills](https://github.com/bitop-dev/agent-platform-skills) | Community skill registry | ✅ 5 skills, 2 commits |
+| [agent-core](https://github.com/bitop-dev/agent-core) | Standalone CLI + Go library | ✅ 171 tests, 45 commits |
+| **agent-platform-api** (this repo) | Go Fiber REST API | ✅ 22 tests, 24 commits |
+| [agent-platform-web](https://github.com/bitop-dev/agent-platform-web) | React web portal | ✅ 14 pages, 18 commits |
+| [agent-platform-skills](https://github.com/bitop-dev/agent-platform-skills) | Community skill registry | ✅ 10 skills (4 WASM + 6 instruction) |
 | [agent-platform-docs](https://github.com/bitop-dev/agent-platform-docs) | Architecture & planning | ✅ Comprehensive |
 
 ---
