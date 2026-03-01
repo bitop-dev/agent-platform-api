@@ -46,6 +46,6 @@ func (h *DashboardHandler) Stats(c *fiber.Ctx) error {
 		"agents":      agentCount,
 		"total_runs":  totalRuns,
 		"run_status":  statuses,
-		"recent_runs": recent,
+		"recent_runs": recentRunsToDTOs(recent),
 	})
 }

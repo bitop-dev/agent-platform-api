@@ -91,13 +91,7 @@ func TestE2EAgentRun(t *testing.T) {
 	}
 
 	// 6. Check output contains "4"
-	outputRaw := finalRun["output_text"]
-	var output string
-	if om, ok := outputRaw.(map[string]any); ok {
-		if s, ok := om["String"].(string); ok {
-			output = s
-		}
-	}
+	output, _ := finalRun["output_text"].(string)
 
 	t.Logf("✓ output: %q", output)
 	if !strings.Contains(output, "4") {

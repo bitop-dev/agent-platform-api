@@ -90,7 +90,7 @@ func (h *AgentHandler) Create(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create agent"})
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(agent)
+	return c.Status(fiber.StatusCreated).JSON(agentToDTO(agent))
 }
 
 // List returns all agents for the authenticated user.
@@ -102,7 +102,7 @@ func (h *AgentHandler) List(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list agents"})
 	}
 
-	return c.JSON(fiber.Map{"agents": agents})
+	return c.JSON(fiber.Map{"agents": agentsToDTOs(agents)})
 }
 
 // Get returns a single agent by ID.
@@ -119,7 +119,7 @@ func (h *AgentHandler) Get(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "access denied"})
 	}
 
-	return c.JSON(agent)
+	return c.JSON(agentToDTO(agent))
 }
 
 // Update updates an existing agent.

@@ -90,7 +90,7 @@ func (h *RunHandler) Create(c *fiber.Ctx) error {
 		BaseURL:  req.BaseURL,
 	})
 
-	return c.Status(fiber.StatusAccepted).JSON(run)
+	return c.Status(fiber.StatusAccepted).JSON(runToDTO(run))
 }
 
 // Get returns a single run.
@@ -109,7 +109,7 @@ func (h *RunHandler) Get(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "access denied"})
 	}
 
-	return c.JSON(run)
+	return c.JSON(runToDTO(run))
 }
 
 // List returns runs for an agent.
@@ -138,7 +138,7 @@ func (h *RunHandler) List(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list runs"})
 	}
 
-	return c.JSON(fiber.Map{"runs": runs})
+	return c.JSON(fiber.Map{"runs": runsToDTOs(runs)})
 }
 
 // Events returns the event log for a run.
@@ -161,7 +161,7 @@ func (h *RunHandler) Events(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list events"})
 	}
 
-	return c.JSON(fiber.Map{"events": events})
+	return c.JSON(fiber.Map{"events": eventsToDTOs(events)})
 }
 
 // Cancel cancels an in-flight run.
