@@ -162,7 +162,9 @@ func (r *Runner) execute(req RunRequest) {
 	}
 
 	var skills []*agentpkg.Skill
+	var skillNames []string
 	for _, as := range agentSkills {
+		skillNames = append(skillNames, as.Name)
 		// If we have full SKILL.md content, parse it to get rich metadata
 		if as.SkillMd != "" {
 			if parsed, err := agentpkg.ParseSkillMD([]byte(as.SkillMd)); err == nil {
@@ -174,8 +176,20 @@ func (r *Runner) execute(req RunRequest) {
 		skills = append(skills, agentpkg.NewSkill(as.Name, as.Description, as.SkillMd))
 	}
 
-	if len(skills) > 0 {
-		slog.Info("loaded agent skills", "agent_id", req.AgentID, "count", len(skills))
+	// Auto-install missing skills from default registry, then register their tools
+	if len(skillNames) > 0 {
+		skillDir := agentpkg.DefaultSkillDir()
+		for _, name := range skillNames {
+			// Try to install if not already present
+			_ = agentpkg.InstallSkill(agentpkg.DefaultSkillSource, name, skillDir)
+		}
+		// Register subprocess tools (web_search.py, web_fetch.py, etc.) into the engine
+		loaded := agentpkg.RegisterSkillTools(engine, skillNames, skillDir)
+		// Merge any richer skill objects from local load (have Dir, Tools, etc.)
+		if len(loaded) > 0 {
+			skills = loaded
+		}
+		slog.Info("loaded agent skills", "agent_id", req.AgentID, "count", len(skills), "tool_skills", len(loaded))
 	}
 
 	agent, err := agentpkg.NewBuilder().
