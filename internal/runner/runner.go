@@ -1,0 +1,226 @@
+// Package runner executes agent runs using agent-core/pkg/agent.
+// Runs are dispatched asynchronously and results are persisted to the database.
+package runner
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"log"
+	"strings"
+	"sync"
+	"time"
+
+	agentpkg "github.com/bitop-dev/agent-core/pkg/agent"
+
+	"github.com/bitop-dev/agent-platform-api/internal/db"
+	"github.com/bitop-dev/agent-platform-api/internal/db/sqlc"
+	"github.com/bitop-dev/agent-platform-api/internal/ws"
+)
+
+// RunRequest is what gets queued for execution.
+type RunRequest struct {
+	RunID    string
+	AgentID  string
+	Mission  string
+	Provider string
+	Model    string
+	Config   string // YAML config from agent record
+	APIKey   string // Decrypted LLM API key
+	BaseURL  string // Optional base URL override
+}
+
+// Runner manages concurrent agent run execution.
+type Runner struct {
+	store   *db.Store
+	hub     *ws.Hub
+	queue   chan RunRequest
+	wg      sync.WaitGroup
+	workers int
+}
+
+// New creates a runner with the given number of concurrent workers.
+func New(store *db.Store, hub *ws.Hub, workers int) *Runner {
+	if workers <= 0 {
+		workers = 4
+	}
+	return &Runner{
+		store:   store,
+		hub:     hub,
+		queue:   make(chan RunRequest, 100),
+		workers: workers,
+	}
+}
+
+// Start launches worker goroutines.
+func (r *Runner) Start() {
+	for i := range r.workers {
+		r.wg.Add(1)
+		go r.worker(i)
+	}
+	log.Printf("[runner] started %d workers", r.workers)
+}
+
+// Stop waits for all workers to finish.
+func (r *Runner) Stop() {
+	close(r.queue)
+	r.wg.Wait()
+}
+
+// Enqueue adds a run to the execution queue.
+func (r *Runner) Enqueue(req RunRequest) {
+	r.queue <- req
+}
+
+func (r *Runner) worker(_ int) {
+	defer r.wg.Done()
+	for req := range r.queue {
+		r.execute(req)
+	}
+}
+
+// makeProvider creates the right LLM provider based on name.
+func makeProvider(name, apiKey, baseURL string) agentpkg.Provider {
+	switch {
+	case strings.Contains(strings.ToLower(name), "anthropic"):
+		if baseURL == "" {
+			baseURL = "https://api.anthropic.com"
+		}
+		return agentpkg.NewAnthropicProvider(apiKey, baseURL)
+	default:
+		if baseURL == "" {
+			baseURL = "https://api.openai.com/v1"
+		}
+		return agentpkg.NewOpenAIProvider(apiKey, baseURL)
+	}
+}
+
+func (r *Runner) execute(req RunRequest) {
+	ctx := context.Background()
+	startTime := time.Now()
+
+	// Mark as running
+	_ = r.store.UpdateRunStatus(ctx, sqlc.UpdateRunStatusParams{
+		Status:    "running",
+		StartedAt: sql.NullTime{Time: startTime, Valid: true},
+		ID:        req.RunID,
+	})
+	r.broadcast(req.RunID, "status", map[string]string{"status": "running"})
+
+	// Build provider
+	p := makeProvider(req.Provider, req.APIKey, req.BaseURL)
+	p = agentpkg.NewReliableProvider(p)
+
+	// Build agent config
+	cfg := &agentpkg.Config{
+		Name:           fmt.Sprintf("run-%s", req.RunID[:8]),
+		Model:          req.Model,
+		MaxTurns:       20,
+		TimeoutSeconds: 300,
+	}
+
+	// If we have stored YAML config, parse it
+	if req.Config != "" {
+		if parsed, err := agentpkg.ParseConfig([]byte(req.Config)); err == nil {
+			cfg = parsed
+			cfg.Model = req.Model // ensure model matches
+		}
+	}
+
+	engine := agentpkg.NewToolEngine()
+
+	agent, err := agentpkg.NewBuilder().
+		WithConfig(cfg).
+		WithProvider(p).
+		WithTools(engine).
+		WithObserver(agentpkg.NoopObserver{}).
+		Build()
+	if err != nil {
+		r.failRun(ctx, req.RunID, startTime, fmt.Sprintf("build agent: %v", err))
+		return
+	}
+
+	events, err := agent.Run(ctx, req.Mission)
+	if err != nil {
+		r.failRun(ctx, req.RunID, startTime, fmt.Sprintf("start run: %v", err))
+		return
+	}
+
+	// Stream events
+	var (
+		outputText   string
+		totalTurns   int
+		inputTokens  int
+		outputTokens int
+		seq          int
+	)
+
+	for event := range events {
+		seq++
+
+		// Persist event
+		data, _ := json.Marshal(event.Data)
+		_ = r.store.InsertRunEvent(ctx, sqlc.InsertRunEventParams{
+			RunID:     req.RunID,
+			Seq:       int64(seq),
+			EventType: string(event.Type),
+			DataJson:  sql.NullString{String: string(data), Valid: true},
+		})
+
+		// Broadcast to WebSocket subscribers
+		r.broadcast(req.RunID, string(event.Type), event.Data)
+
+		// Accumulate results
+		switch event.Type {
+		case agentpkg.EventTextDelta:
+			if d, ok := event.Data.(agentpkg.TextDeltaData); ok {
+				outputText += d.Text
+			}
+		case agentpkg.EventAgentEnd:
+			if d, ok := event.Data.(agentpkg.AgentEndData); ok {
+				totalTurns = d.TotalTurns
+				inputTokens = d.TotalTokens // approximate
+			}
+		}
+	}
+
+	duration := time.Since(startTime).Milliseconds()
+
+	_ = r.store.UpdateRunResult(ctx, sqlc.UpdateRunResultParams{
+		Status:       "succeeded",
+		OutputText:   sql.NullString{String: outputText, Valid: true},
+		TotalTurns:   sql.NullInt64{Int64: int64(totalTurns), Valid: true},
+		InputTokens:  sql.NullInt64{Int64: int64(inputTokens), Valid: true},
+		OutputTokens: sql.NullInt64{Int64: int64(outputTokens), Valid: true},
+		DurationMs:   sql.NullInt64{Int64: duration, Valid: true},
+		CompletedAt:  sql.NullTime{Time: time.Now(), Valid: true},
+		ID:           req.RunID,
+	})
+
+	r.broadcast(req.RunID, "status", map[string]string{"status": "succeeded"})
+}
+
+func (r *Runner) failRun(ctx context.Context, runID string, startTime time.Time, errMsg string) {
+	duration := time.Since(startTime).Milliseconds()
+
+	_ = r.store.UpdateRunResult(ctx, sqlc.UpdateRunResultParams{
+		Status:       "failed",
+		ErrorMessage: sql.NullString{String: errMsg, Valid: true},
+		DurationMs:   sql.NullInt64{Int64: duration, Valid: true},
+		CompletedAt:  sql.NullTime{Time: time.Now(), Valid: true},
+		ID:           runID,
+	})
+
+	r.broadcast(runID, "status", map[string]string{"status": "failed", "error": errMsg})
+}
+
+func (r *Runner) broadcast(runID, eventType string, data any) {
+	if r.hub == nil {
+		return
+	}
+	r.hub.Broadcast(runID, ws.Event{
+		Type: eventType,
+		Data: data,
+	})
+}
