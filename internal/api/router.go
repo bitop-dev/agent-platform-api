@@ -46,6 +46,8 @@ func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Run
 	apiLimiter := middleware.NewRateLimiter(120, time.Minute)   // 120 API calls/min
 
 	// --- Public routes ---
+	app.Get("/api/v1/models", handlers.ListModels)
+
 	authHandler := handlers.NewAuthHandler(store, a)
 	authGroup := app.Group("/api/v1/auth", authLimiter.Middleware())
 	authGroup.Post("/register", authHandler.Register)
@@ -53,6 +55,10 @@ func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Run
 
 	// --- Protected routes ---
 	api := app.Group("/api/v1", apiLimiter.Middleware(), middleware.AuthMiddleware(a))
+
+	// Dashboard
+	dashHandler := handlers.NewDashboardHandler(store)
+	api.Get("/dashboard", dashHandler.Stats)
 
 	// User info
 	api.Get("/me", func(c *fiber.Ctx) error {

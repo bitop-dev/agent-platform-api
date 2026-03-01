@@ -474,6 +474,80 @@ func TestMeEndpoint(t *testing.T) {
 	}
 }
 
+func TestModelsEndpoint(t *testing.T) {
+	store, a, cleanup := setupTest(t)
+	defer cleanup()
+
+	hub := ws.NewHub()
+	r := runner.New(store, hub, 1)
+	app := NewRouter(store, a, newTestEncryptor(t), r, hub)
+
+	// Public — no auth needed
+	req := httptest.NewRequest("GET", "/api/v1/models", nil)
+	resp, _ := app.Test(req)
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var result map[string]any
+	json.NewDecoder(resp.Body).Decode(&result)
+	models := result["models"].([]any)
+	if len(models) < 5 {
+		t.Fatalf("expected at least 5 models, got %d", len(models))
+	}
+
+	// Filter by provider
+	req = httptest.NewRequest("GET", "/api/v1/models?provider=anthropic", nil)
+	resp, _ = app.Test(req)
+	json.NewDecoder(resp.Body).Decode(&result)
+	models = result["models"].([]any)
+	for _, m := range models {
+		model := m.(map[string]any)
+		if model["provider"] != "anthropic" {
+			t.Fatalf("expected anthropic, got %v", model["provider"])
+		}
+	}
+}
+
+func TestDashboard(t *testing.T) {
+	store, a, cleanup := setupTest(t)
+	defer cleanup()
+
+	hub := ws.NewHub()
+	r := runner.New(store, hub, 1)
+	app := NewRouter(store, a, newTestEncryptor(t), r, hub)
+
+	token := registerUser(t, app, "dash@test.com", "Dashboard", "pass123")
+
+	// Create an agent
+	body := `{"name":"Dash Agent","system_prompt":"Hi","model_name":"gpt-4o"}`
+	req := httptest.NewRequest("POST", "/api/v1/agents", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	app.Test(req)
+
+	// Dashboard stats
+	req = httptest.NewRequest("GET", "/api/v1/dashboard", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, _ := app.Test(req)
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var stats map[string]any
+	json.NewDecoder(resp.Body).Decode(&stats)
+
+	agentCount, ok := stats["agents"].(float64)
+	if !ok || int(agentCount) != 1 {
+		t.Fatalf("expected 1 agent, got %v", stats["agents"])
+	}
+
+	totalRuns, ok := stats["total_runs"].(float64)
+	if !ok || int(totalRuns) != 0 {
+		t.Fatalf("expected 0 runs, got %v", stats["total_runs"])
+	}
+}
+
 func TestRequestID(t *testing.T) {
 	store, a, cleanup := setupTest(t)
 	defer cleanup()
