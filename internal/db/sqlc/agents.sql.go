@@ -108,6 +108,48 @@ func (q *Queries) GetAgent(ctx context.Context, id string) (Agent, error) {
 	return i, err
 }
 
+const listAgentsByTeam = `-- name: ListAgentsByTeam :many
+SELECT id, user_id, team_id, name, description, system_prompt, model_provider, model_name, config_yaml, max_turns, timeout_seconds, enabled, created_at, updated_at FROM agents WHERE team_id = ? ORDER BY created_at DESC
+`
+
+func (q *Queries) ListAgentsByTeam(ctx context.Context, teamID sql.NullString) ([]Agent, error) {
+	rows, err := q.db.QueryContext(ctx, listAgentsByTeam, teamID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Agent{}
+	for rows.Next() {
+		var i Agent
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.TeamID,
+			&i.Name,
+			&i.Description,
+			&i.SystemPrompt,
+			&i.ModelProvider,
+			&i.ModelName,
+			&i.ConfigYaml,
+			&i.MaxTurns,
+			&i.TimeoutSeconds,
+			&i.Enabled,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAgentsByUser = `-- name: ListAgentsByUser :many
 SELECT id, user_id, team_id, name, description, system_prompt, model_provider, model_name, config_yaml, max_turns, timeout_seconds, enabled, created_at, updated_at FROM agents WHERE user_id = ? ORDER BY created_at DESC
 `
@@ -148,6 +190,70 @@ func (q *Queries) ListAgentsByUser(ctx context.Context, userID string) ([]Agent,
 		return nil, err
 	}
 	return items, nil
+}
+
+const listAgentsByUserOrTeam = `-- name: ListAgentsByUserOrTeam :many
+SELECT DISTINCT a.id, a.user_id, a.team_id, a.name, a.description, a.system_prompt, a.model_provider, a.model_name, a.config_yaml, a.max_turns, a.timeout_seconds, a.enabled, a.created_at, a.updated_at FROM agents a
+LEFT JOIN team_members tm ON a.team_id = tm.team_id AND tm.user_id = ?
+WHERE a.user_id = ? OR tm.user_id IS NOT NULL
+ORDER BY a.created_at DESC
+`
+
+type ListAgentsByUserOrTeamParams struct {
+	UserID   string `json:"user_id"`
+	UserID_2 string `json:"user_id_2"`
+}
+
+func (q *Queries) ListAgentsByUserOrTeam(ctx context.Context, arg ListAgentsByUserOrTeamParams) ([]Agent, error) {
+	rows, err := q.db.QueryContext(ctx, listAgentsByUserOrTeam, arg.UserID, arg.UserID_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Agent{}
+	for rows.Next() {
+		var i Agent
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.TeamID,
+			&i.Name,
+			&i.Description,
+			&i.SystemPrompt,
+			&i.ModelProvider,
+			&i.ModelName,
+			&i.ConfigYaml,
+			&i.MaxTurns,
+			&i.TimeoutSeconds,
+			&i.Enabled,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setAgentTeam = `-- name: SetAgentTeam :exec
+UPDATE agents SET team_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+`
+
+type SetAgentTeamParams struct {
+	TeamID sql.NullString `json:"team_id"`
+	ID     string         `json:"id"`
+}
+
+func (q *Queries) SetAgentTeam(ctx context.Context, arg SetAgentTeamParams) error {
+	_, err := q.db.ExecContext(ctx, setAgentTeam, arg.TeamID, arg.ID)
+	return err
 }
 
 const updateAgent = `-- name: UpdateAgent :exec

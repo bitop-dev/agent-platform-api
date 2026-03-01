@@ -103,9 +103,18 @@ func (h *AgentHandler) Create(c *fiber.Ctx) error {
 func (h *AgentHandler) List(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 
-	agents, err := h.store.ListAgentsByUser(c.Context(), userID)
+	// Include agents from teams the user belongs to
+	agents, err := h.store.ListAgentsByUserOrTeam(c.Context(), sqlc.ListAgentsByUserOrTeamParams{
+		UserID:   userID,
+		UserID_2: userID,
+	})
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list agents"})
+		// Fallback to user-only if team query fails
+		agents2, err2 := h.store.ListAgentsByUser(c.Context(), userID)
+		if err2 != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list agents"})
+		}
+		return c.JSON(fiber.Map{"agents": agentsToDTOs(agents2)})
 	}
 
 	return c.JSON(fiber.Map{"agents": agentsToDTOs(agents)})
@@ -191,4 +200,34 @@ func (h *AgentHandler) Delete(c *fiber.Ctx) error {
 	})
 
 	return c.JSON(fiber.Map{"status": "deleted"})
+}
+
+// SetTeam assigns an agent to a team (or removes from team if team_id is empty).
+func (h *AgentHandler) SetTeam(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+	agentID := c.Params("id")
+
+	agent, err := h.store.GetAgent(c.Context(), agentID)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "agent not found"})
+	}
+	if agent.UserID != userID {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "access denied"})
+	}
+
+	var req struct {
+		TeamID string `json:"team_id"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+	}
+
+	if err := h.store.SetAgentTeam(c.Context(), sqlc.SetAgentTeamParams{
+		TeamID: sql.NullString{String: req.TeamID, Valid: req.TeamID != ""},
+		ID:     agentID,
+	}); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update team"})
+	}
+
+	return c.JSON(fiber.Map{"status": "updated"})
 }

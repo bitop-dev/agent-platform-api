@@ -95,6 +95,7 @@ func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Run
 	api.Get("/agents/:id", agentHandler.Get)
 	api.Put("/agents/:id", agentHandler.Update)
 	api.Delete("/agents/:id", agentHandler.Delete)
+	api.Put("/agents/:id/team", agentHandler.SetTeam)
 
 	// API Keys
 	apiKeyHandler := handlers.NewAPIKeyHandler(store, enc)

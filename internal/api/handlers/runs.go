@@ -137,17 +137,21 @@ func (h *RunHandler) List(c *fiber.Ctx) error {
 			Offset:   offset,
 		})
 	} else {
-		runs, err = h.store.ListRunsByUser(c.Context(), sqlc.ListRunsByUserParams{
-			UserID: userID,
-			Limit:  int64(perPage),
-			Offset: offset,
+		runs, err = h.store.ListRunsByUserOrTeam(c.Context(), sqlc.ListRunsByUserOrTeamParams{
+			UserID:   userID,
+			UserID_2: userID,
+			Limit:    int64(perPage),
+			Offset:   offset,
 		})
 	}
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list runs"})
 	}
 
-	total, _ := h.store.CountRunsByUser(c.Context(), userID)
+	total, _ := h.store.CountRunsByUserOrTeam(c.Context(), sqlc.CountRunsByUserOrTeamParams{
+		UserID:   userID,
+		UserID_2: userID,
+	})
 
 	return c.JSON(fiber.Map{
 		"runs":     runsToDTOs(runs),

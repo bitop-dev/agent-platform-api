@@ -47,3 +47,18 @@ VALUES (?, ?, ?, ?);
 
 -- name: ListRunEvents :many
 SELECT * FROM run_events WHERE run_id = ? ORDER BY seq;
+
+-- name: ListRunsByUserOrTeam :many
+SELECT r.* FROM runs r
+JOIN agents a ON r.agent_id = a.id
+LEFT JOIN team_members tm ON a.team_id = tm.team_id AND tm.user_id = ?
+WHERE a.user_id = ? OR tm.user_id IS NOT NULL
+ORDER BY r.created_at DESC LIMIT ? OFFSET ?;
+
+-- name: CountRunsByUserOrTeam :one
+SELECT COUNT(*) FROM runs r
+JOIN agents a ON r.agent_id = a.id
+LEFT JOIN team_members tm ON a.team_id = tm.team_id AND tm.user_id = ?
+WHERE a.user_id = ? OR tm.user_id IS NOT NULL;
+
+

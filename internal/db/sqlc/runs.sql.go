@@ -34,6 +34,25 @@ func (q *Queries) CountRunsByUser(ctx context.Context, userID string) (int64, er
 	return count, err
 }
 
+const countRunsByUserOrTeam = `-- name: CountRunsByUserOrTeam :one
+SELECT COUNT(*) FROM runs r
+JOIN agents a ON r.agent_id = a.id
+LEFT JOIN team_members tm ON a.team_id = tm.team_id AND tm.user_id = ?
+WHERE a.user_id = ? OR tm.user_id IS NOT NULL
+`
+
+type CountRunsByUserOrTeamParams struct {
+	UserID   string `json:"user_id"`
+	UserID_2 string `json:"user_id_2"`
+}
+
+func (q *Queries) CountRunsByUserOrTeam(ctx context.Context, arg CountRunsByUserOrTeamParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countRunsByUserOrTeam, arg.UserID, arg.UserID_2)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createRun = `-- name: CreateRun :one
 INSERT INTO runs (id, agent_id, mission, model_provider, model_name, status)
 VALUES (?, ?, ?, ?, ?, 'queued')
@@ -303,6 +322,69 @@ func (q *Queries) ListRunsByUserFiltered(ctx context.Context, arg ListRunsByUser
 		arg.Column3,
 		arg.Column4,
 		arg.Column5,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Run{}
+	for rows.Next() {
+		var i Run
+		if err := rows.Scan(
+			&i.ID,
+			&i.AgentID,
+			&i.TeamID,
+			&i.ParentRunID,
+			&i.Depth,
+			&i.Mission,
+			&i.ModelProvider,
+			&i.ModelName,
+			&i.Status,
+			&i.OutputText,
+			&i.ErrorMessage,
+			&i.TotalTurns,
+			&i.InputTokens,
+			&i.OutputTokens,
+			&i.CostUsd,
+			&i.DurationMs,
+			&i.CreatedAt,
+			&i.StartedAt,
+			&i.CompletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRunsByUserOrTeam = `-- name: ListRunsByUserOrTeam :many
+SELECT r.id, r.agent_id, r.team_id, r.parent_run_id, r.depth, r.mission, r.model_provider, r.model_name, r.status, r.output_text, r.error_message, r.total_turns, r.input_tokens, r.output_tokens, r.cost_usd, r.duration_ms, r.created_at, r.started_at, r.completed_at FROM runs r
+JOIN agents a ON r.agent_id = a.id
+LEFT JOIN team_members tm ON a.team_id = tm.team_id AND tm.user_id = ?
+WHERE a.user_id = ? OR tm.user_id IS NOT NULL
+ORDER BY r.created_at DESC LIMIT ? OFFSET ?
+`
+
+type ListRunsByUserOrTeamParams struct {
+	UserID   string `json:"user_id"`
+	UserID_2 string `json:"user_id_2"`
+	Limit    int64  `json:"limit"`
+	Offset   int64  `json:"offset"`
+}
+
+func (q *Queries) ListRunsByUserOrTeam(ctx context.Context, arg ListRunsByUserOrTeamParams) ([]Run, error) {
+	rows, err := q.db.QueryContext(ctx, listRunsByUserOrTeam,
+		arg.UserID,
+		arg.UserID_2,
 		arg.Limit,
 		arg.Offset,
 	)
