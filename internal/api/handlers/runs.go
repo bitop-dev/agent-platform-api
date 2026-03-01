@@ -90,6 +90,7 @@ func (h *RunHandler) Create(c *fiber.Ctx) error {
 	h.runner.Enqueue(runner.RunRequest{
 		RunID:    run.ID,
 		AgentID:  agent.ID,
+		UserID:   userID,
 		Mission:  req.Mission,
 		Provider: agent.ModelProvider,
 		Model:    agent.ModelName,

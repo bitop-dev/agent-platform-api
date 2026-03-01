@@ -77,7 +77,7 @@ func run() error {
 	}()
 
 	// Runner
-	r := runner.New(store, hub, 4)
+	r := runner.New(store, hub, enc, 4)
 	r.Start()
 	defer r.Stop()
 

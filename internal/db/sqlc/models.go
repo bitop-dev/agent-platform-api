@@ -178,3 +178,15 @@ type User struct {
 	CreatedAt     time.Time      `json:"created_at"`
 	UpdatedAt     time.Time      `json:"updated_at"`
 }
+
+type UserCredential struct {
+	ID          string    `json:"id"`
+	UserID      string    `json:"user_id"`
+	Name        string    `json:"name"`
+	ValueEnc    []byte    `json:"value_enc"`
+	ValueHint   string    `json:"value_hint"`
+	SkillName   string    `json:"skill_name"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}

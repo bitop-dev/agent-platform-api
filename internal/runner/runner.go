@@ -16,6 +16,7 @@ import (
 	agentpkg "github.com/bitop-dev/agent-core/pkg/agent"
 	"github.com/bitop-dev/agent-platform-api/internal/metrics"
 
+	"github.com/bitop-dev/agent-platform-api/internal/auth"
 	"github.com/bitop-dev/agent-platform-api/internal/db"
 	"github.com/bitop-dev/agent-platform-api/internal/db/sqlc"
 	"github.com/bitop-dev/agent-platform-api/internal/ws"
@@ -25,6 +26,7 @@ import (
 type RunRequest struct {
 	RunID    string
 	AgentID  string
+	UserID   string // owner — used to resolve skill credentials
 	Mission  string
 	Provider string
 	Model    string
@@ -43,11 +45,12 @@ type Runner struct {
 	mu         sync.Mutex
 	cancels    map[string]context.CancelFunc // runID → cancel
 	sandboxReg *agentpkg.SandboxRegistry     // WASM/container sandbox registry
+	enc        *auth.Encryptor               // for decrypting user credentials
 }
 
 // New creates a runner with the given number of concurrent workers.
 // Initializes the WASM sandbox runtime for skill tool execution.
-func New(store *db.Store, hub *ws.Hub, workers int) *Runner {
+func New(store *db.Store, hub *ws.Hub, enc *auth.Encryptor, workers int) *Runner {
 	if workers <= 0 {
 		workers = 4
 	}
@@ -73,6 +76,7 @@ func New(store *db.Store, hub *ws.Hub, workers int) *Runner {
 	return &Runner{
 		store:      store,
 		hub:        hub,
+		enc:        enc,
 		queue:      make(chan RunRequest, 100),
 		workers:    workers,
 		cancels:    make(map[string]context.CancelFunc),
@@ -219,6 +223,25 @@ func (r *Runner) execute(req RunRequest) {
 			MaxTimeoutSec:  60,
 			MaxOutputBytes: 1 << 20, // 1MB
 			MaxMemoryMB:    256,
+			EnvVars:        make(map[string]string),
+		}
+
+		// Load user's skill credentials and pass as env vars to WASM/container tools
+		if req.UserID != "" {
+			creds, err := r.store.ListAllCredentialValues(ctx, req.UserID)
+			if err == nil {
+				for _, cred := range creds {
+					plaintext, err := r.enc.Decrypt(cred.ValueEnc)
+					if err != nil {
+						slog.Warn("failed to decrypt credential", "name", cred.Name, "error", err)
+						continue
+					}
+					caps.EnvVars[cred.Name] = plaintext
+				}
+				if len(creds) > 0 {
+					slog.Info("loaded user credentials for sandbox", "agent_id", req.AgentID, "count", len(creds))
+				}
+			}
 		}
 
 		// Register WASM skill tools through the sandbox system

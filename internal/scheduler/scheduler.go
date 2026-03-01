@@ -164,6 +164,7 @@ func (s *Scheduler) fire(ctx context.Context, sched sqlc.ListDueSchedulesRow, no
 	s.runner.Enqueue(runner.RunRequest{
 		RunID:    runID,
 		AgentID:  sched.AgentID,
+		UserID:   sched.UserID,
 		Mission:  mission,
 		Provider: sched.ModelProvider,
 		Model:    sched.ModelName,

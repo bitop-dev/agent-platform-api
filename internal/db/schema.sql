@@ -160,6 +160,19 @@ CREATE TABLE schedules (
     updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE user_credentials (
+    id          TEXT PRIMARY KEY,
+    user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name        TEXT NOT NULL,
+    value_enc   BLOB NOT NULL,
+    value_hint  TEXT NOT NULL DEFAULT '',
+    skill_name  TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL DEFAULT '',
+    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, name, skill_name)
+);
+
 CREATE TABLE audit_log (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id     TEXT REFERENCES users(id),

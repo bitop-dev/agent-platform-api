@@ -350,6 +350,7 @@ func (h *ScheduleHandler) Trigger(c *fiber.Ctx) error {
 	h.runner.Enqueue(runner.RunRequest{
 		RunID:    runID,
 		AgentID:  sched.AgentID,
+		UserID:   sched.UserID,
 		Mission:  mission,
 		Provider: agent.ModelProvider,
 		Model:    agent.ModelName,

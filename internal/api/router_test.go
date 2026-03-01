@@ -66,7 +66,7 @@ func TestHealthCheck(t *testing.T) {
 	defer cleanup()
 
 	hub := ws.NewHub()
-	r := runner.New(store, hub, 1)
+	r := runner.New(store, hub, nil, 1)
 	app := NewRouter(store, a, newTestEncryptor(t), r, hub, registry.NewSyncer(store.Queries), nil, &config.Config{BaseURL: "http://localhost:8080"})
 
 	req := httptest.NewRequest("GET", "/health", nil)
@@ -89,7 +89,7 @@ func TestRegisterAndLogin(t *testing.T) {
 	defer cleanup()
 
 	hub := ws.NewHub()
-	r := runner.New(store, hub, 1)
+	r := runner.New(store, hub, nil, 1)
 	app := NewRouter(store, a, newTestEncryptor(t), r, hub, registry.NewSyncer(store.Queries), nil, &config.Config{BaseURL: "http://localhost:8080"})
 
 	// Register
@@ -148,7 +148,7 @@ func TestRefreshToken(t *testing.T) {
 	defer cleanup()
 
 	hub := ws.NewHub()
-	r := runner.New(store, hub, 1)
+	r := runner.New(store, hub, nil, 1)
 	app := NewRouter(store, a, newTestEncryptor(t), r, hub, registry.NewSyncer(store.Queries), nil, &config.Config{BaseURL: "http://localhost:8080"})
 
 	// Register — should get both tokens
@@ -213,7 +213,7 @@ func TestAgentCRUD(t *testing.T) {
 	defer cleanup()
 
 	hub := ws.NewHub()
-	r := runner.New(store, hub, 1)
+	r := runner.New(store, hub, nil, 1)
 	app := NewRouter(store, a, newTestEncryptor(t), r, hub, registry.NewSyncer(store.Queries), nil, &config.Config{BaseURL: "http://localhost:8080"})
 
 	// Register user and get token
@@ -289,7 +289,7 @@ func TestUnauthorizedAccess(t *testing.T) {
 	defer cleanup()
 
 	hub := ws.NewHub()
-	r := runner.New(store, hub, 1)
+	r := runner.New(store, hub, nil, 1)
 	app := NewRouter(store, a, newTestEncryptor(t), r, hub, registry.NewSyncer(store.Queries), nil, &config.Config{BaseURL: "http://localhost:8080"})
 
 	// No token
@@ -313,7 +313,7 @@ func TestAgentIsolation(t *testing.T) {
 	defer cleanup()
 
 	hub := ws.NewHub()
-	r := runner.New(store, hub, 1)
+	r := runner.New(store, hub, nil, 1)
 	app := NewRouter(store, a, newTestEncryptor(t), r, hub, registry.NewSyncer(store.Queries), nil, &config.Config{BaseURL: "http://localhost:8080"})
 
 	// Two users
@@ -352,7 +352,7 @@ func TestRunCreation(t *testing.T) {
 	defer cleanup()
 
 	hub := ws.NewHub()
-	r := runner.New(store, hub, 1)
+	r := runner.New(store, hub, nil, 1)
 	// Don't start the runner — we just test the API layer
 	app := NewRouter(store, a, newTestEncryptor(t), r, hub, registry.NewSyncer(store.Queries), nil, &config.Config{BaseURL: "http://localhost:8080"})
 
@@ -422,7 +422,7 @@ func TestAPIKeyCRUD(t *testing.T) {
 	defer cleanup()
 
 	hub := ws.NewHub()
-	r := runner.New(store, hub, 1)
+	r := runner.New(store, hub, nil, 1)
 	app := NewRouter(store, a, newTestEncryptor(t), r, hub, registry.NewSyncer(store.Queries), nil, &config.Config{BaseURL: "http://localhost:8080"})
 
 	token := registerUser(t, app, "keys@test.com", "Key User", "pass123")
@@ -488,7 +488,7 @@ func TestRateLimiting(t *testing.T) {
 	defer cleanup()
 
 	hub := ws.NewHub()
-	r := runner.New(store, hub, 1)
+	r := runner.New(store, hub, nil, 1)
 	app := NewRouter(store, a, newTestEncryptor(t), r, hub, registry.NewSyncer(store.Queries), nil, &config.Config{BaseURL: "http://localhost:8080"})
 
 	// Auth rate limit is 10/min — send 11 requests
@@ -516,7 +516,7 @@ func TestMeEndpoint(t *testing.T) {
 	defer cleanup()
 
 	hub := ws.NewHub()
-	r := runner.New(store, hub, 1)
+	r := runner.New(store, hub, nil, 1)
 	app := NewRouter(store, a, newTestEncryptor(t), r, hub, registry.NewSyncer(store.Queries), nil, &config.Config{BaseURL: "http://localhost:8080"})
 
 	token := registerUser(t, app, "me@test.com", "Me User", "pass123")
@@ -546,7 +546,7 @@ func TestModelsEndpoint(t *testing.T) {
 	defer cleanup()
 
 	hub := ws.NewHub()
-	r := runner.New(store, hub, 1)
+	r := runner.New(store, hub, nil, 1)
 	app := NewRouter(store, a, newTestEncryptor(t), r, hub, registry.NewSyncer(store.Queries), nil, &config.Config{BaseURL: "http://localhost:8080"})
 
 	// Public — no auth needed
@@ -581,7 +581,7 @@ func TestDashboard(t *testing.T) {
 	defer cleanup()
 
 	hub := ws.NewHub()
-	r := runner.New(store, hub, 1)
+	r := runner.New(store, hub, nil, 1)
 	app := NewRouter(store, a, newTestEncryptor(t), r, hub, registry.NewSyncer(store.Queries), nil, &config.Config{BaseURL: "http://localhost:8080"})
 
 	token := registerUser(t, app, "dash@test.com", "Dashboard", "pass123")
@@ -620,7 +620,7 @@ func TestRequestID(t *testing.T) {
 	defer cleanup()
 
 	hub := ws.NewHub()
-	r := runner.New(store, hub, 1)
+	r := runner.New(store, hub, nil, 1)
 	app := NewRouter(store, a, newTestEncryptor(t), r, hub, registry.NewSyncer(store.Queries), nil, &config.Config{BaseURL: "http://localhost:8080"})
 
 	// Should get a request ID back

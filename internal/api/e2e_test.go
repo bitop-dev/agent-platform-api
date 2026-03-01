@@ -45,7 +45,7 @@ func TestE2EAgentRun(t *testing.T) {
 	enc, _ := auth.NewEncryptor("") // dev mode
 	hub := ws.NewHub()
 
-	r := runner.New(store, hub, 2)
+	r := runner.New(store, hub, nil, 2)
 	r.Start()
 	defer r.Stop()
 

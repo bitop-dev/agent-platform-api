@@ -105,6 +105,13 @@ func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Run
 	api.Get("/api-keys", apiKeyHandler.List)
 	api.Delete("/api-keys/:id", apiKeyHandler.Delete)
 
+	// Credentials (skill secrets — GITHUB_TOKEN, SLACK_WEBHOOK_URL, etc.)
+	credHandler := handlers.NewCredentialHandler(store.Queries, enc)
+	api.Post("/credentials", credHandler.Create)
+	api.Get("/credentials", credHandler.List)
+	api.Put("/credentials/:id", credHandler.Update)
+	api.Delete("/credentials/:id", credHandler.Delete)
+
 	// Skills
 	skillHandler := handlers.NewSkillHandler(store)
 	api.Post("/skills", skillHandler.Create)
