@@ -5,6 +5,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/bitop-dev/agent-platform-api/internal/api/middleware"
+	"github.com/bitop-dev/agent-platform-api/internal/audit"
 	"github.com/bitop-dev/agent-platform-api/internal/auth"
 	"github.com/bitop-dev/agent-platform-api/internal/db"
 	"github.com/bitop-dev/agent-platform-api/internal/db/sqlc"
@@ -14,10 +15,11 @@ import (
 type APIKeyHandler struct {
 	store     *db.Store
 	encryptor *auth.Encryptor
+	audit     *audit.Logger
 }
 
 func NewAPIKeyHandler(store *db.Store, enc *auth.Encryptor) *APIKeyHandler {
-	return &APIKeyHandler{store: store, encryptor: enc}
+	return &APIKeyHandler{store: store, encryptor: enc, audit: audit.NewLogger(store.Queries)}
 }
 
 type createAPIKeyRequest struct {
@@ -69,6 +71,11 @@ func (h *APIKeyHandler) Create(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to store key"})
 	}
 
+	h.audit.Log(c.Context(), userID, audit.ActionAPIKeyCreate, apiKey.ID, c.IP(), map[string]any{
+		"provider": apiKey.Provider,
+		"label":    apiKey.Label,
+	})
+
 	// Return without the encrypted key
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"id":         apiKey.ID,
@@ -105,6 +112,8 @@ func (h *APIKeyHandler) Delete(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "key not found"})
 	}
+
+	h.audit.Log(c.Context(), userID, audit.ActionAPIKeyDelete, keyID, c.IP(), nil)
 
 	return c.JSON(fiber.Map{"status": "deleted"})
 }

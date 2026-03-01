@@ -253,6 +253,7 @@ func (h *RunHandler) Cancel(c *fiber.Ctx) error {
 	}
 
 	if h.runner.Cancel(runID) {
+		h.audit.Log(c.Context(), userID, audit.ActionRunCancel, runID, c.IP(), nil)
 		return c.JSON(fiber.Map{"status": "cancelling"})
 	}
 

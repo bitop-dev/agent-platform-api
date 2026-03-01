@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/bitop-dev/agent-platform-api/internal/api/middleware"
+	"github.com/bitop-dev/agent-platform-api/internal/audit"
 	"github.com/bitop-dev/agent-platform-api/internal/auth"
 	"github.com/bitop-dev/agent-platform-api/internal/db"
 	"github.com/bitop-dev/agent-platform-api/internal/db/sqlc"
@@ -21,10 +22,11 @@ type ScheduleHandler struct {
 	scheduler *scheduler.Scheduler
 	runner    *runner.Runner
 	enc       *auth.Encryptor
+	audit     *audit.Logger
 }
 
 func NewScheduleHandler(store *db.Store, sched *scheduler.Scheduler, r *runner.Runner, enc *auth.Encryptor) *ScheduleHandler {
-	return &ScheduleHandler{store: store, scheduler: sched, runner: r, enc: enc}
+	return &ScheduleHandler{store: store, scheduler: sched, runner: r, enc: enc, audit: audit.NewLogger(store.Queries)}
 }
 
 type CreateScheduleRequest struct {
@@ -112,6 +114,11 @@ func (h *ScheduleHandler) Create(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
+
+	h.audit.Log(c.Context(), userID, audit.ActionScheduleCreate, sched.ID, c.IP(), map[string]any{
+		"name": sched.Name,
+		"type": sched.ScheduleType,
+	})
 
 	return c.Status(fiber.StatusCreated).JSON(scheduleToDTO(sched))
 }
@@ -240,12 +247,14 @@ func (h *ScheduleHandler) Update(c *fiber.Ctx) error {
 
 func (h *ScheduleHandler) Delete(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
+	schedID := c.Params("id")
 	err := h.store.DeleteSchedule(c.Context(), sqlc.DeleteScheduleParams{
-		ID: c.Params("id"), UserID: userID,
+		ID: schedID, UserID: userID,
 	})
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
+	h.audit.Log(c.Context(), userID, audit.ActionScheduleDelete, schedID, c.IP(), nil)
 	return c.JSON(fiber.Map{"status": "deleted"})
 }
 

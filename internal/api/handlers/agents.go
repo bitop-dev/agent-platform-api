@@ -171,6 +171,10 @@ func (h *AgentHandler) Update(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update agent"})
 	}
 
+	h.audit.Log(c.Context(), userID, audit.ActionAgentUpdate, agentID, c.IP(), map[string]any{
+		"name": req.Name,
+	})
+
 	updated, err := h.store.GetAgent(c.Context(), agentID)
 	if err != nil {
 		return c.JSON(fiber.Map{"status": "updated"})

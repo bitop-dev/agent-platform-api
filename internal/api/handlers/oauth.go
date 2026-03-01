@@ -12,6 +12,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
+	"github.com/bitop-dev/agent-platform-api/internal/audit"
 	"github.com/bitop-dev/agent-platform-api/internal/auth"
 	"github.com/bitop-dev/agent-platform-api/internal/config"
 	"github.com/bitop-dev/agent-platform-api/internal/db"
@@ -23,10 +24,11 @@ type OAuthHandler struct {
 	store *db.Store
 	auth  *auth.Auth
 	cfg   *config.Config
+	audit *audit.Logger
 }
 
 func NewOAuthHandler(store *db.Store, a *auth.Auth, cfg *config.Config) *OAuthHandler {
-	return &OAuthHandler{store: store, auth: a, cfg: cfg}
+	return &OAuthHandler{store: store, auth: a, cfg: cfg, audit: audit.NewLogger(store.Queries)}
 }
 
 // ── GitHub OAuth ─────────────────────────────────────────────────────────────
@@ -77,6 +79,11 @@ func (h *OAuthHandler) GitHubCallback(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create user"})
 	}
+
+	h.audit.Log(c.Context(), user.ID, audit.ActionOAuthLogin, user.ID, c.IP(), map[string]any{
+		"provider": "github",
+		"email":    user.Email,
+	})
 
 	// Generate JWT
 	access, refresh, err := h.auth.GenerateTokenPair(user.ID, user.Email)
@@ -239,6 +246,11 @@ func (h *OAuthHandler) GoogleCallback(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create user"})
 	}
+
+	h.audit.Log(c.Context(), user.ID, audit.ActionOAuthLogin, user.ID, c.IP(), map[string]any{
+		"provider": "google",
+		"email":    user.Email,
+	})
 
 	access, refresh, err := h.auth.GenerateTokenPair(user.ID, user.Email)
 	if err != nil {

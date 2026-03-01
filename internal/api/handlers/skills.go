@@ -7,16 +7,18 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/bitop-dev/agent-platform-api/internal/api/middleware"
+	"github.com/bitop-dev/agent-platform-api/internal/audit"
 	"github.com/bitop-dev/agent-platform-api/internal/db"
 	"github.com/bitop-dev/agent-platform-api/internal/db/sqlc"
 )
 
 type SkillHandler struct {
 	store *db.Store
+	audit *audit.Logger
 }
 
 func NewSkillHandler(store *db.Store) *SkillHandler {
-	return &SkillHandler{store: store}
+	return &SkillHandler{store: store, audit: audit.NewLogger(store.Queries)}
 }
 
 type createSkillRequest struct {
@@ -184,6 +186,10 @@ func (h *SkillHandler) AttachToAgent(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to attach skill"})
 	}
 
+	h.audit.Log(c.Context(), userID, audit.ActionSkillAttach, agentID, c.IP(), map[string]any{
+		"skill_id": req.SkillID,
+	})
+
 	return c.JSON(fiber.Map{"status": "attached"})
 }
 
@@ -205,6 +211,10 @@ func (h *SkillHandler) DetachFromAgent(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to detach skill"})
 	}
+
+	h.audit.Log(c.Context(), userID, audit.ActionSkillDetach, agentID, c.IP(), map[string]any{
+		"skill_id": skillID,
+	})
 
 	return c.JSON(fiber.Map{"status": "detached"})
 }

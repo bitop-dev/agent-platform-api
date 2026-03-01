@@ -81,10 +81,12 @@ func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Run
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user not found"})
 		}
 		return c.JSON(fiber.Map{
-			"id":         user.ID,
-			"email":      user.Email,
-			"name":       user.Name,
-			"created_at": user.CreatedAt,
+			"id":             user.ID,
+			"email":          user.Email,
+			"name":           user.Name,
+			"avatar_url":     user.AvatarUrl.String,
+			"oauth_provider": user.OauthProvider.String,
+			"created_at":     user.CreatedAt,
 		})
 	})
 

@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/bitop-dev/agent-platform-api/internal/api/middleware"
+	"github.com/bitop-dev/agent-platform-api/internal/audit"
 	"github.com/bitop-dev/agent-platform-api/internal/db"
 	"github.com/bitop-dev/agent-platform-api/internal/db/sqlc"
 )
@@ -16,10 +17,11 @@ import (
 // TeamHandler handles team CRUD, members, and invitations.
 type TeamHandler struct {
 	store *db.Store
+	audit *audit.Logger
 }
 
 func NewTeamHandler(store *db.Store) *TeamHandler {
-	return &TeamHandler{store: store}
+	return &TeamHandler{store: store, audit: audit.NewLogger(store.Queries)}
 }
 
 // ─── DTOs ────────────────────────────────────────────────────────────────────
@@ -94,6 +96,10 @@ func (h *TeamHandler) Create(c *fiber.Ctx) error {
 	// Add creator as owner
 	_ = h.store.AddTeamMember(c.Context(), sqlc.AddTeamMemberParams{
 		TeamID: id, UserID: userID, Role: "owner",
+	})
+
+	h.audit.Log(c.Context(), userID, audit.ActionTeamCreate, id, c.IP(), map[string]any{
+		"name": team.Name,
 	})
 
 	return c.Status(fiber.StatusCreated).JSON(teamToDTO(team))
@@ -191,6 +197,11 @@ func (h *TeamHandler) Invite(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create invitation"})
 	}
 
+	h.audit.Log(c.Context(), userID, audit.ActionTeamInvite, teamID, c.IP(), map[string]any{
+		"email": req.Email,
+		"role":  req.Role,
+	})
+
 	return c.Status(fiber.StatusCreated).JSON(InvitationDTO{
 		ID:        inv.ID,
 		TeamID:    inv.TeamID,
@@ -246,5 +257,8 @@ func (h *TeamHandler) RemoveMember(c *fiber.Ctx) error {
 	}); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to remove"})
 	}
+	h.audit.Log(c.Context(), userID, audit.ActionTeamRemove, teamID, c.IP(), map[string]any{
+		"removed_user": memberID,
+	})
 	return c.JSON(fiber.Map{"status": "removed"})
 }
