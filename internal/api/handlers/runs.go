@@ -103,16 +103,51 @@ func (h *RunHandler) Create(c *fiber.Ctx) error {
 func (h *RunHandler) List(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 
-	runs, err := h.store.ListRunsByUser(c.Context(), userID)
+	page, _ := strconv.Atoi(c.Query("page", "1"))
+	perPage, _ := strconv.Atoi(c.Query("per_page", "25"))
+	status := c.Query("status", "")
+	agentID := c.Query("agent_id", "")
+
+	if page < 1 {
+		page = 1
+	}
+	if perPage < 1 || perPage > 100 {
+		perPage = 25
+	}
+	offset := int64((page - 1) * perPage)
+
+	// Use filtered query if filters are set, otherwise plain list
+	var runs []sqlc.Run
+	var err error
+	if status != "" || agentID != "" {
+		runs, err = h.store.ListRunsByUserFiltered(c.Context(), sqlc.ListRunsByUserFilteredParams{
+			UserID:   userID,
+			Column2:  status,
+			Column3:  status,
+			Column4:  agentID,
+			Column5:  agentID,
+			Limit:    int64(perPage),
+			Offset:   offset,
+		})
+	} else {
+		runs, err = h.store.ListRunsByUser(c.Context(), sqlc.ListRunsByUserParams{
+			UserID: userID,
+			Limit:  int64(perPage),
+			Offset: offset,
+		})
+	}
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list runs"})
 	}
 
-	dtos := make([]RunDTO, len(runs))
-	for i, r := range runs {
-		dtos[i] = runToDTO(r)
-	}
-	return c.JSON(fiber.Map{"runs": dtos})
+	total, _ := h.store.CountRunsByUser(c.Context(), userID)
+
+	return c.JSON(fiber.Map{
+		"runs":     runsToDTOs(runs),
+		"page":     page,
+		"per_page": perPage,
+		"total":    total,
+	})
 }
 
 // Get returns a single run.

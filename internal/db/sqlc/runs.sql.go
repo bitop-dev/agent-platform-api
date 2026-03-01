@@ -21,6 +21,19 @@ func (q *Queries) CountRunsByAgent(ctx context.Context, agentID string) (int64, 
 	return count, err
 }
 
+const countRunsByUser = `-- name: CountRunsByUser :one
+SELECT COUNT(*) FROM runs r
+JOIN agents a ON r.agent_id = a.id
+WHERE a.user_id = ?
+`
+
+func (q *Queries) CountRunsByUser(ctx context.Context, userID string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countRunsByUser, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createRun = `-- name: CreateRun :one
 INSERT INTO runs (id, agent_id, mission, model_provider, model_name, status)
 VALUES (?, ?, ?, ?, ?, 'queued')
@@ -203,11 +216,84 @@ const listRunsByUser = `-- name: ListRunsByUser :many
 SELECT r.id, r.agent_id, r.mission, r.model_provider, r.model_name, r.status, r.output_text, r.error_message, r.total_turns, r.input_tokens, r.output_tokens, r.cost_usd, r.duration_ms, r.created_at, r.started_at, r.completed_at FROM runs r
 JOIN agents a ON r.agent_id = a.id
 WHERE a.user_id = ?
-ORDER BY r.created_at DESC LIMIT 100
+ORDER BY r.created_at DESC LIMIT ? OFFSET ?
 `
 
-func (q *Queries) ListRunsByUser(ctx context.Context, userID string) ([]Run, error) {
-	rows, err := q.db.QueryContext(ctx, listRunsByUser, userID)
+type ListRunsByUserParams struct {
+	UserID string `json:"user_id"`
+	Limit  int64  `json:"limit"`
+	Offset int64  `json:"offset"`
+}
+
+func (q *Queries) ListRunsByUser(ctx context.Context, arg ListRunsByUserParams) ([]Run, error) {
+	rows, err := q.db.QueryContext(ctx, listRunsByUser, arg.UserID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Run{}
+	for rows.Next() {
+		var i Run
+		if err := rows.Scan(
+			&i.ID,
+			&i.AgentID,
+			&i.Mission,
+			&i.ModelProvider,
+			&i.ModelName,
+			&i.Status,
+			&i.OutputText,
+			&i.ErrorMessage,
+			&i.TotalTurns,
+			&i.InputTokens,
+			&i.OutputTokens,
+			&i.CostUsd,
+			&i.DurationMs,
+			&i.CreatedAt,
+			&i.StartedAt,
+			&i.CompletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRunsByUserFiltered = `-- name: ListRunsByUserFiltered :many
+SELECT r.id, r.agent_id, r.mission, r.model_provider, r.model_name, r.status, r.output_text, r.error_message, r.total_turns, r.input_tokens, r.output_tokens, r.cost_usd, r.duration_ms, r.created_at, r.started_at, r.completed_at FROM runs r
+JOIN agents a ON r.agent_id = a.id
+WHERE a.user_id = ?
+  AND (CAST(? AS TEXT) = '' OR r.status = CAST(? AS TEXT))
+  AND (CAST(? AS TEXT) = '' OR r.agent_id = CAST(? AS TEXT))
+ORDER BY r.created_at DESC LIMIT ? OFFSET ?
+`
+
+type ListRunsByUserFilteredParams struct {
+	UserID  string `json:"user_id"`
+	Column2 string `json:"column_2"`
+	Column3 string `json:"column_3"`
+	Column4 string `json:"column_4"`
+	Column5 string `json:"column_5"`
+	Limit   int64  `json:"limit"`
+	Offset  int64  `json:"offset"`
+}
+
+func (q *Queries) ListRunsByUserFiltered(ctx context.Context, arg ListRunsByUserFilteredParams) ([]Run, error) {
+	rows, err := q.db.QueryContext(ctx, listRunsByUserFiltered,
+		arg.UserID,
+		arg.Column2,
+		arg.Column3,
+		arg.Column4,
+		arg.Column5,
+		arg.Limit,
+		arg.Offset,
+	)
 	if err != nil {
 		return nil, err
 	}

@@ -6,6 +6,8 @@ github.com/bitop-dev/agent-core v0.0.0-20260301154636-2d8be41cbf74 h1:LRcHcsz/Ny
 github.com/bitop-dev/agent-core v0.0.0-20260301154636-2d8be41cbf74/go.mod h1:GanF13Ea/ktB0zRzo1ExKn1qNh7W/Uw0dusgmNmesT8=
 github.com/bitop-dev/agent-core v0.0.0-20260301161234-83fb947200a2 h1:8dq5qT4JLBQBl1pvNl4VnjfDEIcfAhFXe8Bv35pauFU=
 github.com/bitop-dev/agent-core v0.0.0-20260301161234-83fb947200a2/go.mod h1:GanF13Ea/ktB0zRzo1ExKn1qNh7W/Uw0dusgmNmesT8=
+github.com/bitop-dev/agent-core v0.0.0-20260301163429-b4568248a5ba h1:L5l5ZyOobcWpZrkj68WmAnf6DEjkY6BVKwR/YM4Bg+Y=
+github.com/bitop-dev/agent-core v0.0.0-20260301163429-b4568248a5ba/go.mod h1:GanF13Ea/ktB0zRzo1ExKn1qNh7W/Uw0dusgmNmesT8=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=
 github.com/dustin/go-humanize v1.0.1/go.mod h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto=

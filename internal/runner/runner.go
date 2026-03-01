@@ -243,7 +243,8 @@ func (r *Runner) execute(req RunRequest) {
 		case agentpkg.EventAgentEnd:
 			if d, ok := event.Data.(agentpkg.AgentEndData); ok {
 				totalTurns = d.TotalTurns
-				inputTokens = d.TotalTokens // approximate
+				inputTokens = d.InputTokens
+				outputTokens = d.OutputTokens
 			}
 		}
 	}

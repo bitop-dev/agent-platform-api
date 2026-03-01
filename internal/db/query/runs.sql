@@ -10,7 +10,20 @@ SELECT * FROM runs WHERE id = ?;
 SELECT r.* FROM runs r
 JOIN agents a ON r.agent_id = a.id
 WHERE a.user_id = ?
-ORDER BY r.created_at DESC LIMIT 100;
+ORDER BY r.created_at DESC LIMIT ? OFFSET ?;
+
+-- name: CountRunsByUser :one
+SELECT COUNT(*) FROM runs r
+JOIN agents a ON r.agent_id = a.id
+WHERE a.user_id = ?;
+
+-- name: ListRunsByUserFiltered :many
+SELECT r.* FROM runs r
+JOIN agents a ON r.agent_id = a.id
+WHERE a.user_id = ?
+  AND (CAST(? AS TEXT) = '' OR r.status = CAST(? AS TEXT))
+  AND (CAST(? AS TEXT) = '' OR r.agent_id = CAST(? AS TEXT))
+ORDER BY r.created_at DESC LIMIT ? OFFSET ?;
 
 -- name: ListRunsByAgent :many
 SELECT * FROM runs WHERE agent_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?;
