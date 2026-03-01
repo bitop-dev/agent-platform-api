@@ -3,6 +3,22 @@ INSERT INTO skills (id, user_id, name, description, tier, version, skill_md, tag
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
+-- name: UpsertRegistrySkill :exec
+INSERT INTO skills (id, user_id, source_id, name, description, tier, version, skill_md, tags, source_url, enabled)
+VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, true)
+ON CONFLICT(id) DO UPDATE SET
+  source_id = excluded.source_id,
+  description = excluded.description,
+  tier = excluded.tier,
+  version = excluded.version,
+  skill_md = excluded.skill_md,
+  tags = excluded.tags,
+  source_url = excluded.source_url,
+  updated_at = CURRENT_TIMESTAMP;
+
+-- name: DeleteSkillsBySource :exec
+DELETE FROM skills WHERE source_id = ? AND id NOT IN (SELECT skill_id FROM agent_skills);
+
 -- name: GetSkill :one
 SELECT * FROM skills WHERE id = ?;
 

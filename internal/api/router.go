@@ -14,12 +14,13 @@ import (
 	"github.com/bitop-dev/agent-platform-api/internal/api/middleware"
 	"github.com/bitop-dev/agent-platform-api/internal/auth"
 	"github.com/bitop-dev/agent-platform-api/internal/db"
+	"github.com/bitop-dev/agent-platform-api/internal/registry"
 	"github.com/bitop-dev/agent-platform-api/internal/runner"
 	"github.com/bitop-dev/agent-platform-api/internal/ws"
 )
 
 // NewRouter creates the Fiber app with all routes configured.
-func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Runner, hub *ws.Hub) *fiber.App {
+func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Runner, hub *ws.Hub, syncer *registry.Syncer) *fiber.App {
 	app := fiber.New(fiber.Config{
 		AppName:      "agent-platform-api",
 		ErrorHandler: errorHandler,
@@ -100,6 +101,14 @@ func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Run
 	api.Post("/agents/:id/skills", skillHandler.AttachToAgent)
 	api.Delete("/agents/:id/skills/:skill_id", skillHandler.DetachFromAgent)
 	api.Get("/agents/:id/skills", skillHandler.ListAgentSkills)
+
+	// Skill Sources
+	srcHandler := handlers.NewSkillSourceHandler(store.Queries, syncer)
+	api.Get("/skill-sources", srcHandler.List)
+	api.Post("/skill-sources", srcHandler.Create)
+	api.Delete("/skill-sources/:id", srcHandler.Delete)
+	api.Post("/skill-sources/:id/sync", srcHandler.Sync)
+	api.Post("/skill-sources/sync", srcHandler.SyncAll)
 
 	// Runs
 	runHandler := handlers.NewRunHandler(store, r, enc)

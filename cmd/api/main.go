@@ -12,6 +12,7 @@ import (
 	"github.com/bitop-dev/agent-platform-api/internal/auth"
 	"github.com/bitop-dev/agent-platform-api/internal/config"
 	"github.com/bitop-dev/agent-platform-api/internal/db"
+	"github.com/bitop-dev/agent-platform-api/internal/registry"
 	"github.com/bitop-dev/agent-platform-api/internal/runner"
 	"github.com/bitop-dev/agent-platform-api/internal/ws"
 )
@@ -62,13 +63,23 @@ func run() error {
 	// WebSocket hub
 	hub := ws.NewHub()
 
+	// Skill registry syncer
+	syncer := registry.NewSyncer(store.Queries)
+
+	// Sync skills from all sources on startup (non-blocking)
+	go func() {
+		if err := syncer.SyncAll(context.Background()); err != nil {
+			slog.Error("skill registry sync failed", "error", err)
+		}
+	}()
+
 	// Runner
 	r := runner.New(store, hub, 4)
 	r.Start()
 	defer r.Stop()
 
 	// Router
-	app := api.NewRouter(store, a, enc, r, hub)
+	app := api.NewRouter(store, a, enc, r, hub, syncer)
 
 	// Graceful shutdown
 	go func() {

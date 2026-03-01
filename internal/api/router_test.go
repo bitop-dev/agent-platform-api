@@ -14,6 +14,7 @@ import (
 
 	"github.com/bitop-dev/agent-platform-api/internal/auth"
 	"github.com/bitop-dev/agent-platform-api/internal/db"
+	"github.com/bitop-dev/agent-platform-api/internal/registry"
 	"github.com/bitop-dev/agent-platform-api/internal/runner"
 	"github.com/bitop-dev/agent-platform-api/internal/ws"
 )
@@ -65,7 +66,7 @@ func TestHealthCheck(t *testing.T) {
 
 	hub := ws.NewHub()
 	r := runner.New(store, hub, 1)
-	app := NewRouter(store, a, newTestEncryptor(t), r, hub)
+	app := NewRouter(store, a, newTestEncryptor(t), r, hub, registry.NewSyncer(store.Queries))
 
 	req := httptest.NewRequest("GET", "/health", nil)
 	resp, err := app.Test(req)
@@ -88,7 +89,7 @@ func TestRegisterAndLogin(t *testing.T) {
 
 	hub := ws.NewHub()
 	r := runner.New(store, hub, 1)
-	app := NewRouter(store, a, newTestEncryptor(t), r, hub)
+	app := NewRouter(store, a, newTestEncryptor(t), r, hub, registry.NewSyncer(store.Queries))
 
 	// Register
 	body := `{"email":"test@example.com","name":"Test User","password":"secret123"}`
@@ -147,7 +148,7 @@ func TestRefreshToken(t *testing.T) {
 
 	hub := ws.NewHub()
 	r := runner.New(store, hub, 1)
-	app := NewRouter(store, a, newTestEncryptor(t), r, hub)
+	app := NewRouter(store, a, newTestEncryptor(t), r, hub, registry.NewSyncer(store.Queries))
 
 	// Register — should get both tokens
 	body := `{"email":"refresh@test.com","name":"Refresh","password":"pass123"}`
@@ -212,7 +213,7 @@ func TestAgentCRUD(t *testing.T) {
 
 	hub := ws.NewHub()
 	r := runner.New(store, hub, 1)
-	app := NewRouter(store, a, newTestEncryptor(t), r, hub)
+	app := NewRouter(store, a, newTestEncryptor(t), r, hub, registry.NewSyncer(store.Queries))
 
 	// Register user and get token
 	token := registerUser(t, app, "crud@test.com", "Test", "pass123")
@@ -288,7 +289,7 @@ func TestUnauthorizedAccess(t *testing.T) {
 
 	hub := ws.NewHub()
 	r := runner.New(store, hub, 1)
-	app := NewRouter(store, a, newTestEncryptor(t), r, hub)
+	app := NewRouter(store, a, newTestEncryptor(t), r, hub, registry.NewSyncer(store.Queries))
 
 	// No token
 	req := httptest.NewRequest("GET", "/api/v1/agents", nil)
@@ -312,7 +313,7 @@ func TestAgentIsolation(t *testing.T) {
 
 	hub := ws.NewHub()
 	r := runner.New(store, hub, 1)
-	app := NewRouter(store, a, newTestEncryptor(t), r, hub)
+	app := NewRouter(store, a, newTestEncryptor(t), r, hub, registry.NewSyncer(store.Queries))
 
 	// Two users
 	token1 := registerUser(t, app, "user1@test.com", "User1", "pass1")
@@ -352,7 +353,7 @@ func TestRunCreation(t *testing.T) {
 	hub := ws.NewHub()
 	r := runner.New(store, hub, 1)
 	// Don't start the runner — we just test the API layer
-	app := NewRouter(store, a, newTestEncryptor(t), r, hub)
+	app := NewRouter(store, a, newTestEncryptor(t), r, hub, registry.NewSyncer(store.Queries))
 
 	token := registerUser(t, app, "runner@test.com", "Runner", "pass123")
 
@@ -421,7 +422,7 @@ func TestAPIKeyCRUD(t *testing.T) {
 
 	hub := ws.NewHub()
 	r := runner.New(store, hub, 1)
-	app := NewRouter(store, a, newTestEncryptor(t), r, hub)
+	app := NewRouter(store, a, newTestEncryptor(t), r, hub, registry.NewSyncer(store.Queries))
 
 	token := registerUser(t, app, "keys@test.com", "Key User", "pass123")
 
@@ -487,7 +488,7 @@ func TestRateLimiting(t *testing.T) {
 
 	hub := ws.NewHub()
 	r := runner.New(store, hub, 1)
-	app := NewRouter(store, a, newTestEncryptor(t), r, hub)
+	app := NewRouter(store, a, newTestEncryptor(t), r, hub, registry.NewSyncer(store.Queries))
 
 	// Auth rate limit is 10/min — send 11 requests
 	for i := range 10 {
@@ -515,7 +516,7 @@ func TestMeEndpoint(t *testing.T) {
 
 	hub := ws.NewHub()
 	r := runner.New(store, hub, 1)
-	app := NewRouter(store, a, newTestEncryptor(t), r, hub)
+	app := NewRouter(store, a, newTestEncryptor(t), r, hub, registry.NewSyncer(store.Queries))
 
 	token := registerUser(t, app, "me@test.com", "Me User", "pass123")
 
@@ -545,7 +546,7 @@ func TestModelsEndpoint(t *testing.T) {
 
 	hub := ws.NewHub()
 	r := runner.New(store, hub, 1)
-	app := NewRouter(store, a, newTestEncryptor(t), r, hub)
+	app := NewRouter(store, a, newTestEncryptor(t), r, hub, registry.NewSyncer(store.Queries))
 
 	// Public — no auth needed
 	req := httptest.NewRequest("GET", "/api/v1/models", nil)
@@ -580,7 +581,7 @@ func TestDashboard(t *testing.T) {
 
 	hub := ws.NewHub()
 	r := runner.New(store, hub, 1)
-	app := NewRouter(store, a, newTestEncryptor(t), r, hub)
+	app := NewRouter(store, a, newTestEncryptor(t), r, hub, registry.NewSyncer(store.Queries))
 
 	token := registerUser(t, app, "dash@test.com", "Dashboard", "pass123")
 
@@ -619,7 +620,7 @@ func TestRequestID(t *testing.T) {
 
 	hub := ws.NewHub()
 	r := runner.New(store, hub, 1)
-	app := NewRouter(store, a, newTestEncryptor(t), r, hub)
+	app := NewRouter(store, a, newTestEncryptor(t), r, hub, registry.NewSyncer(store.Queries))
 
 	// Should get a request ID back
 	req := httptest.NewRequest("GET", "/health", nil)

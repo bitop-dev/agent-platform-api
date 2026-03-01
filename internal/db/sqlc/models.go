@@ -75,6 +75,7 @@ type RunEvent struct {
 type Skill struct {
 	ID          string         `json:"id"`
 	UserID      sql.NullString `json:"user_id"`
+	SourceID    sql.NullString `json:"source_id"`
 	Name        string         `json:"name"`
 	Description string         `json:"description"`
 	Tier        string         `json:"tier"`
@@ -85,6 +86,20 @@ type Skill struct {
 	Enabled     bool           `json:"enabled"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
+}
+
+type SkillSource struct {
+	ID         string         `json:"id"`
+	UserID     sql.NullString `json:"user_id"`
+	Url        string         `json:"url"`
+	Label      string         `json:"label"`
+	IsDefault  bool           `json:"is_default"`
+	LastSynced sql.NullTime   `json:"last_synced"`
+	SkillCount int64          `json:"skill_count"`
+	Status     string         `json:"status"`
+	ErrorMsg   sql.NullString `json:"error_msg"`
+	CreatedAt  time.Time      `json:"created_at"`
+	UpdatedAt  time.Time      `json:"updated_at"`
 }
 
 type User struct {

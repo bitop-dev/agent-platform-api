@@ -28,6 +28,8 @@ type Config struct {
 	// agent-core settings
 	DefaultModel    string // Default model for new agents
 	DefaultProvider string // Default provider for new agents
+
+
 }
 
 // Load reads configuration from environment variables with sensible defaults.

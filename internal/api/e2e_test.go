@@ -12,6 +12,7 @@ import (
 
 	"github.com/bitop-dev/agent-platform-api/internal/auth"
 	"github.com/bitop-dev/agent-platform-api/internal/db"
+	"github.com/bitop-dev/agent-platform-api/internal/registry"
 	"github.com/bitop-dev/agent-platform-api/internal/runner"
 	"github.com/bitop-dev/agent-platform-api/internal/ws"
 	"github.com/gofiber/fiber/v2"
@@ -47,7 +48,7 @@ func TestE2EAgentRun(t *testing.T) {
 	r.Start()
 	defer r.Stop()
 
-	app := NewRouter(store, a, enc, r, hub)
+	app := NewRouter(store, a, enc, r, hub, registry.NewSyncer(store.Queries))
 
 	// 1. Register user
 	token := e2eRegister(t, app, "e2e@test.com", "E2E Tester", "pass123")

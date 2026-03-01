@@ -54,9 +54,24 @@ CREATE TABLE runs (
     completed_at    TIMESTAMP
 );
 
+CREATE TABLE skill_sources (
+    id          TEXT PRIMARY KEY,
+    user_id     TEXT REFERENCES users(id),
+    url         TEXT NOT NULL,
+    label       TEXT NOT NULL DEFAULT '',
+    is_default  BOOLEAN NOT NULL DEFAULT false,
+    last_synced TIMESTAMP,
+    skill_count INTEGER NOT NULL DEFAULT 0,
+    status      TEXT NOT NULL DEFAULT 'pending',
+    error_msg   TEXT,
+    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE skills (
     id          TEXT PRIMARY KEY,
     user_id     TEXT REFERENCES users(id),
+    source_id   TEXT REFERENCES skill_sources(id),
     name        TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     tier        TEXT NOT NULL DEFAULT 'workspace',
