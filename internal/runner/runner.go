@@ -1,5 +1,6 @@
 // Package runner executes agent runs using agent-core/pkg/agent.
 // Runs are dispatched asynchronously and results are persisted to the database.
+// All skill tools execute inside a WASM sandbox via Wazero.
 package runner
 
 import (
@@ -34,26 +35,48 @@ type RunRequest struct {
 
 // Runner manages concurrent agent run execution.
 type Runner struct {
-	store    *db.Store
-	hub      *ws.Hub
-	queue    chan RunRequest
-	wg       sync.WaitGroup
-	workers  int
-	mu       sync.Mutex
-	cancels  map[string]context.CancelFunc // runID → cancel
+	store      *db.Store
+	hub        *ws.Hub
+	queue      chan RunRequest
+	wg         sync.WaitGroup
+	workers    int
+	mu         sync.Mutex
+	cancels    map[string]context.CancelFunc // runID → cancel
+	sandboxReg *agentpkg.SandboxRegistry     // WASM/container sandbox registry
 }
 
 // New creates a runner with the given number of concurrent workers.
+// Initializes the WASM sandbox runtime for skill tool execution.
 func New(store *db.Store, hub *ws.Hub, workers int) *Runner {
 	if workers <= 0 {
 		workers = 4
 	}
+
+	// Initialize sandbox registry with WASM runtime
+	reg := agentpkg.NewSandboxRegistry()
+
+	wasmRT, err := agentpkg.NewWASMRuntime(context.Background())
+	if err != nil {
+		slog.Error("failed to initialize WASM runtime", "error", err)
+	} else {
+		reg.Register(wasmRT)
+		slog.Info("WASM sandbox runtime ready")
+	}
+
+	// Try container runtime (optional — requires Docker/Podman)
+	containerRT, err := agentpkg.NewContainerRuntime()
+	if err == nil {
+		reg.Register(containerRT)
+		slog.Info("container sandbox runtime ready")
+	}
+
 	return &Runner{
-		store:   store,
-		hub:     hub,
-		queue:   make(chan RunRequest, 100),
-		workers: workers,
-		cancels: make(map[string]context.CancelFunc),
+		store:      store,
+		hub:        hub,
+		queue:      make(chan RunRequest, 100),
+		workers:    workers,
+		cancels:    make(map[string]context.CancelFunc),
+		sandboxReg: reg,
 	}
 }
 
@@ -66,10 +89,13 @@ func (r *Runner) Start() {
 	slog.Info("runner started", "workers", r.workers)
 }
 
-// Stop waits for all workers to finish.
+// Stop waits for all workers to finish and cleans up sandbox runtimes.
 func (r *Runner) Stop() {
 	close(r.queue)
 	r.wg.Wait()
+	if r.sandboxReg != nil {
+		r.sandboxReg.Close()
+	}
 }
 
 // Enqueue adds a run to the execution queue.
@@ -179,16 +205,25 @@ func (r *Runner) execute(req RunRequest) {
 		skills = append(skills, agentpkg.NewSkill(as.Name, as.Description, as.SkillMd))
 	}
 
-	// Auto-install missing skills from default registry, then register their tools
+	// Auto-install missing skills from default registry, then register their WASM tools
 	if len(skillNames) > 0 {
 		skillDir := agentpkg.DefaultSkillDir()
 		for _, name := range skillNames {
 			// Try to install if not already present
 			_ = agentpkg.InstallSkill(agentpkg.DefaultSkillSource, name, skillDir)
 		}
-		// Register subprocess tools (web_search.py, web_fetch.py, etc.) into the engine
-		loaded := agentpkg.RegisterSkillTools(engine, skillNames, skillDir)
-		// Merge any richer skill objects from local load (have Dir, Tools, etc.)
+
+		// Build sandbox capabilities — allow all network hosts by default for platform runs
+		caps := agentpkg.SandboxCapabilities{
+			AllowedHosts:   []string{"*"}, // platform runs get full network access
+			MaxTimeoutSec:  60,
+			MaxOutputBytes: 1 << 20, // 1MB
+			MaxMemoryMB:    256,
+		}
+
+		// Register WASM skill tools through the sandbox system
+		loaded := agentpkg.RegisterSkillTools(engine, r.sandboxReg, skillNames, "wasm", caps, skillDir)
+		// Merge richer skill objects from local load (have Dir, Tools, etc.)
 		if len(loaded) > 0 {
 			skills = loaded
 		}
