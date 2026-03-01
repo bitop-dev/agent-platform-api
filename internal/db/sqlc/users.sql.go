@@ -96,6 +96,32 @@ func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
 	return i, err
 }
 
+const getUserByOAuth = `-- name: GetUserByOAuth :one
+SELECT id, email, name, password_hash, avatar_url, oauth_provider, oauth_id, created_at, updated_at FROM users WHERE oauth_provider = ? AND oauth_id = ?
+`
+
+type GetUserByOAuthParams struct {
+	OauthProvider sql.NullString `json:"oauth_provider"`
+	OauthID       sql.NullString `json:"oauth_id"`
+}
+
+func (q *Queries) GetUserByOAuth(ctx context.Context, arg GetUserByOAuthParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByOAuth, arg.OauthProvider, arg.OauthID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.PasswordHash,
+		&i.AvatarUrl,
+		&i.OauthProvider,
+		&i.OauthID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateUser = `-- name: UpdateUser :exec
 UPDATE users SET name = ?, updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
@@ -109,4 +135,49 @@ type UpdateUserParams struct {
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) error {
 	_, err := q.db.ExecContext(ctx, updateUser, arg.Name, arg.ID)
 	return err
+}
+
+const upsertOAuthUser = `-- name: UpsertOAuthUser :one
+INSERT INTO users (id, email, name, avatar_url, oauth_provider, oauth_id)
+VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT (email) DO UPDATE SET
+    name = excluded.name,
+    avatar_url = excluded.avatar_url,
+    oauth_provider = excluded.oauth_provider,
+    oauth_id = excluded.oauth_id,
+    updated_at = CURRENT_TIMESTAMP
+RETURNING id, email, name, password_hash, avatar_url, oauth_provider, oauth_id, created_at, updated_at
+`
+
+type UpsertOAuthUserParams struct {
+	ID            string         `json:"id"`
+	Email         string         `json:"email"`
+	Name          string         `json:"name"`
+	AvatarUrl     sql.NullString `json:"avatar_url"`
+	OauthProvider sql.NullString `json:"oauth_provider"`
+	OauthID       sql.NullString `json:"oauth_id"`
+}
+
+func (q *Queries) UpsertOAuthUser(ctx context.Context, arg UpsertOAuthUserParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, upsertOAuthUser,
+		arg.ID,
+		arg.Email,
+		arg.Name,
+		arg.AvatarUrl,
+		arg.OauthProvider,
+		arg.OauthID,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.PasswordHash,
+		&i.AvatarUrl,
+		&i.OauthProvider,
+		&i.OauthID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

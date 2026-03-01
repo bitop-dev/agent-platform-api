@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/bitop-dev/agent-platform-api/internal/auth"
+	"github.com/bitop-dev/agent-platform-api/internal/config"
 	"github.com/bitop-dev/agent-platform-api/internal/db"
 	"github.com/bitop-dev/agent-platform-api/internal/registry"
 	"github.com/bitop-dev/agent-platform-api/internal/runner"
@@ -48,7 +49,7 @@ func TestE2EAgentRun(t *testing.T) {
 	r.Start()
 	defer r.Stop()
 
-	app := NewRouter(store, a, enc, r, hub, registry.NewSyncer(store.Queries), nil)
+	app := NewRouter(store, a, enc, r, hub, registry.NewSyncer(store.Queries), nil, &config.Config{BaseURL: "http://localhost:8080"})
 
 	// 1. Register user
 	token := e2eRegister(t, app, "e2e@test.com", "E2E Tester", "pass123")

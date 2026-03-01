@@ -6,6 +6,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
+	"github.com/bitop-dev/agent-platform-api/internal/audit"
 	"github.com/bitop-dev/agent-platform-api/internal/auth"
 	"github.com/bitop-dev/agent-platform-api/internal/db"
 	"github.com/bitop-dev/agent-platform-api/internal/db/sqlc"
@@ -15,10 +16,11 @@ import (
 type AuthHandler struct {
 	store *db.Store
 	auth  *auth.Auth
+	audit *audit.Logger
 }
 
 func NewAuthHandler(store *db.Store, a *auth.Auth) *AuthHandler {
-	return &AuthHandler{store: store, auth: a}
+	return &AuthHandler{store: store, auth: a, audit: audit.NewLogger(store.Queries)}
 }
 
 type registerRequest struct {
@@ -73,6 +75,10 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal error"})
 	}
 
+	h.audit.Log(c.Context(), user.ID, audit.ActionRegister, user.ID, c.IP(), map[string]any{
+		"email": user.Email,
+	})
+
 	return c.Status(fiber.StatusCreated).JSON(tokenResponse{
 		Token:        access,
 		RefreshToken: refresh,
@@ -104,6 +110,8 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal error"})
 	}
+
+	h.audit.Log(c.Context(), user.ID, audit.ActionLogin, user.ID, c.IP(), nil)
 
 	return c.JSON(tokenResponse{
 		Token:        access,

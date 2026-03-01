@@ -13,6 +13,7 @@ import (
 	"github.com/bitop-dev/agent-platform-api/internal/api/handlers"
 	"github.com/bitop-dev/agent-platform-api/internal/api/middleware"
 	"github.com/bitop-dev/agent-platform-api/internal/auth"
+	"github.com/bitop-dev/agent-platform-api/internal/config"
 	"github.com/bitop-dev/agent-platform-api/internal/db"
 	"github.com/bitop-dev/agent-platform-api/internal/registry"
 	"github.com/bitop-dev/agent-platform-api/internal/runner"
@@ -21,7 +22,7 @@ import (
 )
 
 // NewRouter creates the Fiber app with all routes configured.
-func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Runner, hub *ws.Hub, syncer *registry.Syncer, sched *scheduler.Scheduler) *fiber.App {
+func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Runner, hub *ws.Hub, syncer *registry.Syncer, sched *scheduler.Scheduler, cfg *config.Config) *fiber.App {
 	app := fiber.New(fiber.Config{
 		AppName:      "agent-platform-api",
 		ErrorHandler: errorHandler,
@@ -57,6 +58,13 @@ func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Run
 	authGroup.Post("/register", authHandler.Register)
 	authGroup.Post("/login", authHandler.Login)
 	authGroup.Post("/refresh", authHandler.Refresh)
+
+	// OAuth routes (public — redirects to providers)
+	oauthHandler := handlers.NewOAuthHandler(store, a, cfg)
+	authGroup.Get("/github", oauthHandler.GitHubLogin)
+	authGroup.Get("/github/callback", oauthHandler.GitHubCallback)
+	authGroup.Get("/google", oauthHandler.GoogleLogin)
+	authGroup.Get("/google/callback", oauthHandler.GoogleCallback)
 
 	// --- Protected routes ---
 	api := app.Group("/api/v1", apiLimiter.Middleware(), middleware.AuthMiddleware(a))
@@ -144,6 +152,10 @@ func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Run
 	api.Post("/teams/:id/invitations", teamHandler.Invite)
 	api.Post("/invitations/:invitation_id/accept", teamHandler.AcceptInvitation)
 	api.Delete("/teams/:id/members/:user_id", teamHandler.RemoveMember)
+
+	// Audit log
+	auditHandler := handlers.NewAuditHandler(store)
+	api.Get("/audit-log", auditHandler.List)
 
 	// Child runs (orchestration)
 	api.Get("/runs/:id/children", runHandler.ListChildren)

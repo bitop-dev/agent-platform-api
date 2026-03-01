@@ -25,11 +25,15 @@ type Config struct {
 	// Encryption
 	EncryptionKey string // 32-byte hex key for encrypting API keys at rest
 
+	// OAuth
+	GitHubClientID     string // GitHub OAuth app client ID
+	GitHubClientSecret string // GitHub OAuth app client secret
+	GoogleClientID     string // Google OAuth client ID
+	GoogleClientSecret string // Google OAuth client secret
+
 	// agent-core settings
 	DefaultModel    string // Default model for new agents
 	DefaultProvider string // Default provider for new agents
-
-
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -42,8 +46,12 @@ func Load() (*Config, error) {
 		JWTSecret:        envStr("JWT_SECRET", ""),
 		JWTExpiryMinutes: envInt("JWT_EXPIRY_MINUTES", 60),
 		EncryptionKey:    envStr("ENCRYPTION_KEY", ""),
-		DefaultModel:     envStr("DEFAULT_MODEL", "gpt-4o"),
-		DefaultProvider:  envStr("DEFAULT_PROVIDER", "openai"),
+		GitHubClientID:     envStr("GITHUB_CLIENT_ID", ""),
+		GitHubClientSecret: envStr("GITHUB_CLIENT_SECRET", ""),
+		GoogleClientID:     envStr("GOOGLE_CLIENT_ID", ""),
+		GoogleClientSecret: envStr("GOOGLE_CLIENT_SECRET", ""),
+		DefaultModel:       envStr("DEFAULT_MODEL", "gpt-4o"),
+		DefaultProvider:    envStr("DEFAULT_PROVIDER", "openai"),
 	}
 
 	// Auto-detect driver from URL

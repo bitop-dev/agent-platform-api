@@ -87,7 +87,7 @@ func run() error {
 	defer sched.Stop()
 
 	// Router
-	app := api.NewRouter(store, a, enc, r, hub, syncer, sched)
+	app := api.NewRouter(store, a, enc, r, hub, syncer, sched, cfg)
 
 	// Graceful shutdown with drain period
 	go func() {

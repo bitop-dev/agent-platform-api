@@ -8,6 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/bitop-dev/agent-platform-api/internal/api/middleware"
+	"github.com/bitop-dev/agent-platform-api/internal/audit"
 	"github.com/bitop-dev/agent-platform-api/internal/db"
 	"github.com/bitop-dev/agent-platform-api/internal/db/sqlc"
 )
@@ -15,10 +16,11 @@ import (
 // AgentHandler handles agent CRUD.
 type AgentHandler struct {
 	store *db.Store
+	audit *audit.Logger
 }
 
 func NewAgentHandler(store *db.Store) *AgentHandler {
-	return &AgentHandler{store: store}
+	return &AgentHandler{store: store, audit: audit.NewLogger(store.Queries)}
 }
 
 type createAgentRequest struct {
@@ -89,6 +91,10 @@ func (h *AgentHandler) Create(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create agent"})
 	}
+
+	h.audit.Log(c.Context(), userID, audit.ActionAgentCreate, agent.ID, c.IP(), map[string]any{
+		"name": agent.Name,
+	})
 
 	return c.Status(fiber.StatusCreated).JSON(agentToDTO(agent))
 }
@@ -179,6 +185,10 @@ func (h *AgentHandler) Delete(c *fiber.Ctx) error {
 	if err := h.store.DeleteAgent(c.Context(), agentID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to delete agent"})
 	}
+
+	h.audit.Log(c.Context(), userID, audit.ActionAgentDelete, agentID, c.IP(), map[string]any{
+		"name": agent.Name,
+	})
 
 	return c.JSON(fiber.Map{"status": "deleted"})
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/bitop-dev/agent-platform-api/internal/api/middleware"
+	"github.com/bitop-dev/agent-platform-api/internal/audit"
 	"github.com/bitop-dev/agent-platform-api/internal/auth"
 	"github.com/bitop-dev/agent-platform-api/internal/db"
 	"github.com/bitop-dev/agent-platform-api/internal/db/sqlc"
@@ -20,10 +21,11 @@ type RunHandler struct {
 	store     *db.Store
 	runner    *runner.Runner
 	encryptor *auth.Encryptor
+	audit     *audit.Logger
 }
 
 func NewRunHandler(store *db.Store, r *runner.Runner, enc *auth.Encryptor) *RunHandler {
-	return &RunHandler{store: store, runner: r, encryptor: enc}
+	return &RunHandler{store: store, runner: r, encryptor: enc, audit: audit.NewLogger(store.Queries)}
 }
 
 type createRunRequest struct {
@@ -94,6 +96,11 @@ func (h *RunHandler) Create(c *fiber.Ctx) error {
 		Config:   agent.ConfigYaml,
 		APIKey:   apiKey,
 		BaseURL:  baseURL,
+	})
+
+	h.audit.Log(c.Context(), userID, audit.ActionRunCreate, run.ID, c.IP(), map[string]any{
+		"agent_id": agent.ID,
+		"agent":    agent.Name,
 	})
 
 	return c.Status(fiber.StatusAccepted).JSON(runToDTO(run))
