@@ -15,6 +15,7 @@ import (
 	"github.com/bitop-dev/agent-platform-api/internal/auth"
 	"github.com/bitop-dev/agent-platform-api/internal/config"
 	"github.com/bitop-dev/agent-platform-api/internal/db"
+	"github.com/bitop-dev/agent-platform-api/internal/orchestrator"
 	"github.com/bitop-dev/agent-platform-api/internal/registry"
 	"github.com/bitop-dev/agent-platform-api/internal/runner"
 	"github.com/bitop-dev/agent-platform-api/internal/scheduler"
@@ -22,7 +23,7 @@ import (
 )
 
 // NewRouter creates the Fiber app with all routes configured.
-func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Runner, hub *ws.Hub, syncer *registry.Syncer, sched *scheduler.Scheduler, cfg *config.Config) *fiber.App {
+func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Runner, hub *ws.Hub, syncer *registry.Syncer, sched *scheduler.Scheduler, orch *orchestrator.Orchestrator, cfg *config.Config) *fiber.App {
 	app := fiber.New(fiber.Config{
 		AppName:      "agent-platform-api",
 		ErrorHandler: errorHandler,
@@ -162,6 +163,17 @@ func NewRouter(store *db.Store, a *auth.Auth, enc *auth.Encryptor, r *runner.Run
 	api.Post("/teams/:id/invitations", teamHandler.Invite)
 	api.Post("/invitations/:invitation_id/accept", teamHandler.AcceptInvitation)
 	api.Delete("/teams/:id/members/:user_id", teamHandler.RemoveMember)
+
+	// Workflows (AI Teams)
+	wfHandler := handlers.NewWorkflowHandler(store.Queries, orch)
+	api.Post("/workflows", wfHandler.Create)
+	api.Get("/workflows", wfHandler.List)
+	api.Get("/workflows/:id", wfHandler.Get)
+	api.Put("/workflows/:id", wfHandler.Update)
+	api.Delete("/workflows/:id", wfHandler.Delete)
+	api.Post("/workflows/:id/run", wfHandler.Run)
+	api.Get("/workflows/:id/runs", wfHandler.ListRuns)
+	api.Get("/workflow-runs/:run_id", wfHandler.GetRun)
 
 	// Audit log
 	auditHandler := handlers.NewAuditHandler(store)

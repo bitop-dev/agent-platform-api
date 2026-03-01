@@ -14,6 +14,7 @@ import (
 	"github.com/bitop-dev/agent-platform-api/internal/auth"
 	"github.com/bitop-dev/agent-platform-api/internal/config"
 	"github.com/bitop-dev/agent-platform-api/internal/db"
+	"github.com/bitop-dev/agent-platform-api/internal/orchestrator"
 	"github.com/bitop-dev/agent-platform-api/internal/registry"
 	"github.com/bitop-dev/agent-platform-api/internal/runner"
 	"github.com/bitop-dev/agent-platform-api/internal/scheduler"
@@ -86,8 +87,12 @@ func run() error {
 	sched.Start()
 	defer sched.Stop()
 
+	// Workflow orchestrator
+	orch := orchestrator.New(store, r, enc)
+	defer orch.Stop()
+
 	// Router
-	app := api.NewRouter(store, a, enc, r, hub, syncer, sched, cfg)
+	app := api.NewRouter(store, a, enc, r, hub, syncer, sched, orch, cfg)
 
 	// Graceful shutdown with drain period
 	go func() {

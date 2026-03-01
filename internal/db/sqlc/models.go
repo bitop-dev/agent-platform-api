@@ -190,3 +190,48 @@ type UserCredential struct {
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
+
+type Workflow struct {
+	ID          string         `json:"id"`
+	UserID      string         `json:"user_id"`
+	TeamID      sql.NullString `json:"team_id"`
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Enabled     bool           `json:"enabled"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+}
+
+type WorkflowRun struct {
+	ID           string         `json:"id"`
+	WorkflowID   string         `json:"workflow_id"`
+	UserID       string         `json:"user_id"`
+	Status       string         `json:"status"`
+	InputText    string         `json:"input_text"`
+	OutputText   sql.NullString `json:"output_text"`
+	ErrorMessage sql.NullString `json:"error_message"`
+	CreatedAt    time.Time      `json:"created_at"`
+	StartedAt    sql.NullTime   `json:"started_at"`
+	CompletedAt  sql.NullTime   `json:"completed_at"`
+}
+
+type WorkflowStep struct {
+	ID              string    `json:"id"`
+	WorkflowID      string    `json:"workflow_id"`
+	AgentID         string    `json:"agent_id"`
+	Name            string    `json:"name"`
+	Position        int64     `json:"position"`
+	MissionTemplate string    `json:"mission_template"`
+	DependsOn       string    `json:"depends_on"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
+type WorkflowStepRun struct {
+	ID            string         `json:"id"`
+	WorkflowRunID string         `json:"workflow_run_id"`
+	StepID        string         `json:"step_id"`
+	RunID         sql.NullString `json:"run_id"`
+	Status        string         `json:"status"`
+	StartedAt     sql.NullTime   `json:"started_at"`
+	CompletedAt   sql.NullTime   `json:"completed_at"`
+}
