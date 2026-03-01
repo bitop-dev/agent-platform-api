@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -88,7 +89,7 @@ func (h *ScheduleHandler) Create(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 		if !t.IsZero() {
-			nextRun = sql.NullTime{Time: t, Valid: true}
+			nextRun = sql.NullTime{Time: t.UTC().Truncate(time.Second), Valid: true}
 		}
 	}
 
@@ -211,7 +212,7 @@ func (h *ScheduleHandler) Update(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 		if !t.IsZero() {
-			nextRun = sql.NullTime{Time: t, Valid: true}
+			nextRun = sql.NullTime{Time: t.UTC().Truncate(time.Second), Valid: true}
 		}
 	}
 
@@ -271,7 +272,7 @@ func (h *ScheduleHandler) Enable(c *fiber.Ctx) error {
 			LastRunID:         sched.LastRunID,
 			LastError:         sched.LastError,
 			ConsecutiveErrors: 0,
-			NextRunAt:         sql.NullTime{Time: t, Valid: true},
+			NextRunAt:         sql.NullTime{Time: t.UTC().Truncate(time.Second), Valid: true},
 			ID:                schedID,
 		})
 	}

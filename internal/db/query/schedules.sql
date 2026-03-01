@@ -42,7 +42,7 @@ UPDATE schedules SET enabled = false, updated_at = CURRENT_TIMESTAMP WHERE id = 
 SELECT s.*, a.model_provider, a.model_name, a.system_prompt, a.max_turns, a.timeout_seconds
 FROM schedules s
 JOIN agents a ON s.agent_id = a.id
-WHERE s.enabled = true AND s.next_run_at <= ?
+WHERE s.enabled = true AND s.next_run_at IS NOT NULL AND s.next_run_at <= ?
 ORDER BY s.next_run_at ASC;
 
 -- name: UpdateScheduleAfterRun :exec

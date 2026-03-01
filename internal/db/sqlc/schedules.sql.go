@@ -162,7 +162,7 @@ const listDueSchedules = `-- name: ListDueSchedules :many
 SELECT s.id, s.user_id, s.agent_id, s.name, s.description, s.schedule_type, s.cron_expr, s.interval_seconds, s.timezone, s.mission, s.enabled, s.overlap_policy, s.max_retries, s.next_run_at, s.last_run_at, s.last_run_status, s.last_run_id, s.last_error, s.consecutive_errors, s.created_at, s.updated_at, a.model_provider, a.model_name, a.system_prompt, a.max_turns, a.timeout_seconds
 FROM schedules s
 JOIN agents a ON s.agent_id = a.id
-WHERE s.enabled = true AND s.next_run_at <= ?
+WHERE s.enabled = true AND s.next_run_at IS NOT NULL AND s.next_run_at <= ?
 ORDER BY s.next_run_at ASC
 `
 

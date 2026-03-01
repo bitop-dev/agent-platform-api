@@ -81,10 +81,23 @@ func (s *Scheduler) loop(ctx context.Context) {
 	}
 }
 
+// timeToSQL formats a time for SQLite-compatible storage and comparison.
+func timeToSQL(t time.Time) sql.NullTime {
+	return sql.NullTime{Time: t.UTC().Truncate(time.Second), Valid: true}
+}
+
+// nullTimeSQL returns a NullTime that's null if t is zero.
+func nullTimeSQL(t time.Time) sql.NullTime {
+	if t.IsZero() {
+		return sql.NullTime{}
+	}
+	return sql.NullTime{Time: t.UTC().Truncate(time.Second), Valid: true}
+}
+
 func (s *Scheduler) tick(ctx context.Context) {
 	now := time.Now().UTC()
 
-	due, err := s.store.ListDueSchedules(ctx, sql.NullTime{Time: now, Valid: true})
+	due, err := s.store.ListDueSchedules(ctx, timeToSQL(now))
 	if err != nil {
 		slog.Error("scheduler: list due schedules", "error", err)
 		return
@@ -111,7 +124,7 @@ func (s *Scheduler) fire(ctx context.Context, sched sqlc.ListDueSchedulesRow, no
 				LastRunID:         sched.LastRunID,
 				LastError:         sched.LastError,
 				ConsecutiveErrors: sched.ConsecutiveErrors,
-				NextRunAt:         sql.NullTime{Time: nextRun, Valid: true},
+				NextRunAt:         timeToSQL(nextRun),
 				ID:                sched.ID,
 			})
 			return
@@ -163,12 +176,12 @@ func (s *Scheduler) fire(ctx context.Context, sched sqlc.ListDueSchedulesRow, no
 	// Update schedule state
 	nextRun := s.computeNextRun(sched, now)
 	_ = s.store.UpdateScheduleAfterRun(ctx, sqlc.UpdateScheduleAfterRunParams{
-		LastRunAt:         sql.NullTime{Time: now, Valid: true},
+		LastRunAt:         timeToSQL(now),
 		LastRunStatus:     sql.NullString{String: "queued", Valid: true},
 		LastRunID:         sql.NullString{String: runID, Valid: true},
 		LastError:         sql.NullString{},
 		ConsecutiveErrors: 0,
-		NextRunAt:         sql.NullTime{Time: nextRun, Valid: !nextRun.IsZero()},
+		NextRunAt:         nullTimeSQL(nextRun),
 		ID:                sched.ID,
 	})
 }
@@ -184,12 +197,12 @@ func (s *Scheduler) recordFailure(ctx context.Context, sched sqlc.ListDueSchedul
 	}
 
 	_ = s.store.UpdateScheduleAfterRun(ctx, sqlc.UpdateScheduleAfterRunParams{
-		LastRunAt:         sql.NullTime{Time: now, Valid: true},
+		LastRunAt:         timeToSQL(now),
 		LastRunStatus:     sql.NullString{String: "failed", Valid: true},
 		LastRunID:         sql.NullString{},
 		LastError:         sql.NullString{String: errMsg, Valid: true},
 		ConsecutiveErrors: consecutive,
-		NextRunAt:         sql.NullTime{Time: nextRun, Valid: !nextRun.IsZero()},
+		NextRunAt:         nullTimeSQL(nextRun),
 		ID:                sched.ID,
 	})
 }
