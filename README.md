@@ -2,7 +2,7 @@
 
 Go REST API server for the Agent Platform. Wraps [agent-core](https://github.com/bitop-dev/agent-core) with persistence, authentication, real-time WebSocket streaming, and a multi-source skill registry.
 
-> **Status**: Feature-complete. 48 Go files, ~10K lines, 22 tests. OAuth, audit logging, teams, schedules, AI Teams (workflows), skill credentials, Prometheus metrics, CI/CD.
+> **Status**: Feature-complete. 51 Go files, ~10.6K lines, 22 tests. OAuth, audit logging, teams, schedules, AI Teams (workflows), skill credentials, Prometheus metrics, CI/CD.
 
 ---
 
@@ -33,7 +33,7 @@ See [agent-platform-docs](https://github.com/bitop-dev/agent-platform-docs) for 
 
 ---
 
-## API Endpoints (70 routes)
+## API Endpoints (75 routes)
 
 ### Public (no auth required)
 
@@ -97,6 +97,7 @@ OAuth flow: server redirects to provider → callback creates/links user → red
 |---|---|---|
 | POST | `/api/v1/api-keys` | Store LLM API key (AES-256-GCM encrypted at rest) |
 | GET | `/api/v1/api-keys` | List keys (hints only, never full key) |
+| PUT | `/api/v1/api-keys/:id` | Update key (label, base URL, default, optionally rotate key) |
 | DELETE | `/api/v1/api-keys/:id` | Delete API key |
 
 #### Skills
@@ -239,7 +240,7 @@ curl -X POST http://localhost:8080/api/v1/skill-sources \
 
 ### Audit Logging
 
-All state-changing operations are audit-logged with 18 action types:
+All state-changing operations are audit-logged with 21 action types:
 
 | Category | Actions |
 |---|---|
@@ -250,6 +251,8 @@ All state-changing operations are audit-logged with 18 action types:
 | **Skills** | `skill.attach`, `skill.detach` |
 | **Schedules** | `schedule.create`, `schedule.delete` |
 | **Teams** | `team.create`, `team.invite`, `team.remove_member` |
+| **Credentials** | `credential.create`, `credential.delete` |
+| **Workflows** | `workflow.create`, `workflow.delete`, `workflow.run` |
 
 ### Observability
 
@@ -271,7 +274,7 @@ On SIGINT/SIGTERM:
 
 ## Database
 
-### Schema (8 migrations, 13 tables)
+### Schema (11 migrations, 19 tables)
 
 | Table | Description |
 |---|---|
@@ -280,13 +283,18 @@ On SIGINT/SIGTERM:
 | `team_members` | Team membership (user, role: owner/admin/member/viewer) |
 | `team_invitations` | Pending team invites (email, role, status) |
 | `api_keys` | LLM provider keys (AES-256-GCM encrypted, with base_url) |
+| `user_credentials` | Per-user skill secrets (AES-256-GCM encrypted, scoped by skill) |
 | `agents` | Agent configs (name, prompt, model, YAML, optional team_id) |
 | `runs` | Run records (status, output, metrics, parent_run_id for orchestration) |
 | `run_events` | Event log per run (seq, type, JSON data) |
-| `skills` | Skill registry (name, tier, SKILL.md, source tracking) |
+| `skills` | Skill registry (name, tier, SKILL.md, requires_env, source tracking) |
 | `agent_skills` | Agent ↔ skill linking (ordered, with config) |
 | `skill_sources` | Registered skill repos (url, status, last synced) |
 | `schedules` | Cron/interval/one-shot schedules with overlap policy |
+| `workflows` | AI Team workflow definitions (name, description, owner) |
+| `workflow_steps` | Workflow step DAG (agent, mission template, depends_on) |
+| `workflow_runs` | Workflow execution records (status, input, output) |
+| `workflow_step_runs` | Per-step run tracking within a workflow execution |
 | `audit_log` | Audit trail (user, action, resource, metadata, timestamp) |
 
 ### Tooling
