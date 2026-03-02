@@ -115,6 +115,7 @@ CREATE TABLE skills (
     tags        TEXT NOT NULL DEFAULT '',
     source_url  TEXT,
     enabled     BOOLEAN NOT NULL DEFAULT true,
+    requires_env TEXT NOT NULL DEFAULT '[]',
     created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

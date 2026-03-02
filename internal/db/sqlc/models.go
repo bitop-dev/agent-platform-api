@@ -122,6 +122,7 @@ type Skill struct {
 	Tags        string         `json:"tags"`
 	SourceUrl   sql.NullString `json:"source_url"`
 	Enabled     bool           `json:"enabled"`
+	RequiresEnv string         `json:"requires_env"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
 }

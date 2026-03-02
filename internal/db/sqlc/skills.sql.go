@@ -37,7 +37,7 @@ func (q *Queries) AddAgentSkill(ctx context.Context, arg AddAgentSkillParams) er
 const createSkill = `-- name: CreateSkill :one
 INSERT INTO skills (id, user_id, name, description, tier, version, skill_md, tags, source_url)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, user_id, source_id, name, description, tier, version, skill_md, tags, source_url, enabled, created_at, updated_at
+RETURNING id, user_id, source_id, name, description, tier, version, skill_md, tags, source_url, enabled, requires_env, created_at, updated_at
 `
 
 type CreateSkillParams struct {
@@ -77,6 +77,7 @@ func (q *Queries) CreateSkill(ctx context.Context, arg CreateSkillParams) (Skill
 		&i.Tags,
 		&i.SourceUrl,
 		&i.Enabled,
+		&i.RequiresEnv,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -102,7 +103,7 @@ func (q *Queries) DeleteSkillsBySource(ctx context.Context, sourceID sql.NullStr
 }
 
 const getSkill = `-- name: GetSkill :one
-SELECT id, user_id, source_id, name, description, tier, version, skill_md, tags, source_url, enabled, created_at, updated_at FROM skills WHERE id = ?
+SELECT id, user_id, source_id, name, description, tier, version, skill_md, tags, source_url, enabled, requires_env, created_at, updated_at FROM skills WHERE id = ?
 `
 
 func (q *Queries) GetSkill(ctx context.Context, id string) (Skill, error) {
@@ -120,6 +121,7 @@ func (q *Queries) GetSkill(ctx context.Context, id string) (Skill, error) {
 		&i.Tags,
 		&i.SourceUrl,
 		&i.Enabled,
+		&i.RequiresEnv,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -127,7 +129,7 @@ func (q *Queries) GetSkill(ctx context.Context, id string) (Skill, error) {
 }
 
 const listAgentSkills = `-- name: ListAgentSkills :many
-SELECT s.id, s.user_id, s.source_id, s.name, s.description, s.tier, s.version, s.skill_md, s.tags, s.source_url, s.enabled, s.created_at, s.updated_at, ags.position, ags.config_json
+SELECT s.id, s.user_id, s.source_id, s.name, s.description, s.tier, s.version, s.skill_md, s.tags, s.source_url, s.enabled, s.requires_env, s.created_at, s.updated_at, ags.position, ags.config_json
 FROM skills s
 JOIN agent_skills ags ON ags.skill_id = s.id
 WHERE ags.agent_id = ?
@@ -146,6 +148,7 @@ type ListAgentSkillsRow struct {
 	Tags        string         `json:"tags"`
 	SourceUrl   sql.NullString `json:"source_url"`
 	Enabled     bool           `json:"enabled"`
+	RequiresEnv string         `json:"requires_env"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
 	Position    int64          `json:"position"`
@@ -173,6 +176,7 @@ func (q *Queries) ListAgentSkills(ctx context.Context, agentID string) ([]ListAg
 			&i.Tags,
 			&i.SourceUrl,
 			&i.Enabled,
+			&i.RequiresEnv,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Position,
@@ -192,7 +196,7 @@ func (q *Queries) ListAgentSkills(ctx context.Context, agentID string) ([]ListAg
 }
 
 const listSkills = `-- name: ListSkills :many
-SELECT id, user_id, source_id, name, description, tier, version, skill_md, tags, source_url, enabled, created_at, updated_at FROM skills WHERE enabled = true ORDER BY name
+SELECT id, user_id, source_id, name, description, tier, version, skill_md, tags, source_url, enabled, requires_env, created_at, updated_at FROM skills WHERE enabled = true ORDER BY name
 `
 
 func (q *Queries) ListSkills(ctx context.Context) ([]Skill, error) {
@@ -216,6 +220,7 @@ func (q *Queries) ListSkills(ctx context.Context) ([]Skill, error) {
 			&i.Tags,
 			&i.SourceUrl,
 			&i.Enabled,
+			&i.RequiresEnv,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -233,7 +238,7 @@ func (q *Queries) ListSkills(ctx context.Context) ([]Skill, error) {
 }
 
 const listSkillsByTier = `-- name: ListSkillsByTier :many
-SELECT id, user_id, source_id, name, description, tier, version, skill_md, tags, source_url, enabled, created_at, updated_at FROM skills WHERE tier = ? AND enabled = true ORDER BY name
+SELECT id, user_id, source_id, name, description, tier, version, skill_md, tags, source_url, enabled, requires_env, created_at, updated_at FROM skills WHERE tier = ? AND enabled = true ORDER BY name
 `
 
 func (q *Queries) ListSkillsByTier(ctx context.Context, tier string) ([]Skill, error) {
@@ -257,6 +262,7 @@ func (q *Queries) ListSkillsByTier(ctx context.Context, tier string) ([]Skill, e
 			&i.Tags,
 			&i.SourceUrl,
 			&i.Enabled,
+			&i.RequiresEnv,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -274,7 +280,7 @@ func (q *Queries) ListSkillsByTier(ctx context.Context, tier string) ([]Skill, e
 }
 
 const listSkillsByUser = `-- name: ListSkillsByUser :many
-SELECT id, user_id, source_id, name, description, tier, version, skill_md, tags, source_url, enabled, created_at, updated_at FROM skills WHERE user_id = ? ORDER BY created_at DESC
+SELECT id, user_id, source_id, name, description, tier, version, skill_md, tags, source_url, enabled, requires_env, created_at, updated_at FROM skills WHERE user_id = ? ORDER BY created_at DESC
 `
 
 func (q *Queries) ListSkillsByUser(ctx context.Context, userID sql.NullString) ([]Skill, error) {
@@ -298,6 +304,7 @@ func (q *Queries) ListSkillsByUser(ctx context.Context, userID sql.NullString) (
 			&i.Tags,
 			&i.SourceUrl,
 			&i.Enabled,
+			&i.RequiresEnv,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -357,8 +364,8 @@ func (q *Queries) UpdateSkill(ctx context.Context, arg UpdateSkillParams) error 
 }
 
 const upsertRegistrySkill = `-- name: UpsertRegistrySkill :exec
-INSERT INTO skills (id, user_id, source_id, name, description, tier, version, skill_md, tags, source_url, enabled)
-VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, true)
+INSERT INTO skills (id, user_id, source_id, name, description, tier, version, skill_md, tags, source_url, requires_env, enabled)
+VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, true)
 ON CONFLICT(id) DO UPDATE SET
   source_id = excluded.source_id,
   description = excluded.description,
@@ -367,6 +374,7 @@ ON CONFLICT(id) DO UPDATE SET
   skill_md = excluded.skill_md,
   tags = excluded.tags,
   source_url = excluded.source_url,
+  requires_env = excluded.requires_env,
   updated_at = CURRENT_TIMESTAMP
 `
 
@@ -380,6 +388,7 @@ type UpsertRegistrySkillParams struct {
 	SkillMd     string         `json:"skill_md"`
 	Tags        string         `json:"tags"`
 	SourceUrl   sql.NullString `json:"source_url"`
+	RequiresEnv string         `json:"requires_env"`
 }
 
 func (q *Queries) UpsertRegistrySkill(ctx context.Context, arg UpsertRegistrySkillParams) error {
@@ -393,6 +402,7 @@ func (q *Queries) UpsertRegistrySkill(ctx context.Context, arg UpsertRegistrySki
 		arg.SkillMd,
 		arg.Tags,
 		arg.SourceUrl,
+		arg.RequiresEnv,
 	)
 	return err
 }

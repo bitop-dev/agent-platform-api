@@ -154,6 +154,7 @@ type SkillDTO struct {
 	SkillMD     string    `json:"skill_md,omitempty"`
 	Tags        string    `json:"tags,omitempty"`
 	SourceURL   string    `json:"source_url,omitempty"`
+	RequiresEnv string    `json:"requires_env,omitempty"`
 	Enabled     bool      `json:"enabled"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
@@ -170,6 +171,7 @@ func skillToDTO(s sqlc.Skill) SkillDTO {
 		SkillMD:     s.SkillMd,
 		Tags:        s.Tags,
 		SourceURL:   s.SourceUrl.String,
+		RequiresEnv: s.RequiresEnv,
 		Enabled:     s.Enabled,
 		CreatedAt:   s.CreatedAt,
 		UpdatedAt:   s.UpdatedAt,

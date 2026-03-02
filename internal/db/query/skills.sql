@@ -4,8 +4,8 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: UpsertRegistrySkill :exec
-INSERT INTO skills (id, user_id, source_id, name, description, tier, version, skill_md, tags, source_url, enabled)
-VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, true)
+INSERT INTO skills (id, user_id, source_id, name, description, tier, version, skill_md, tags, source_url, requires_env, enabled)
+VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, true)
 ON CONFLICT(id) DO UPDATE SET
   source_id = excluded.source_id,
   description = excluded.description,
@@ -14,6 +14,7 @@ ON CONFLICT(id) DO UPDATE SET
   skill_md = excluded.skill_md,
   tags = excluded.tags,
   source_url = excluded.source_url,
+  requires_env = excluded.requires_env,
   updated_at = CURRENT_TIMESTAMP;
 
 -- name: DeleteSkillsBySource :exec

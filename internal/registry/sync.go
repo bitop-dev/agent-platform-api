@@ -122,6 +122,8 @@ func (s *Syncer) SyncSource(ctx context.Context, src sqlc.SkillSource) (int, err
 		tags := strings.Join(skill.Tags, ",")
 		sourceURL := fmt.Sprintf("https://%s/tree/main/%s", src.Url, skill.Path)
 
+		envJSON, _ := json.Marshal(skill.RequiresEnv)
+
 		err := s.store.UpsertRegistrySkill(ctx, sqlc.UpsertRegistrySkillParams{
 			ID:          fmt.Sprintf("%s:%s", src.ID, skill.Name),
 			SourceID:    sql.NullString{String: src.ID, Valid: true},
@@ -132,6 +134,7 @@ func (s *Syncer) SyncSource(ctx context.Context, src sqlc.SkillSource) (int, err
 			SkillMd:     skillMD,
 			Tags:        tags,
 			SourceUrl:   sql.NullString{String: sourceURL, Valid: true},
+			RequiresEnv: string(envJSON),
 		})
 		if err != nil {
 			slog.Error("failed to upsert skill", "name", skill.Name, "source", src.Url, "error", err)
