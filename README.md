@@ -2,7 +2,7 @@
 
 Go REST API server for the Agent Platform. Wraps [agent-core](https://github.com/bitop-dev/agent-core) with persistence, authentication, real-time WebSocket streaming, and a multi-source skill registry.
 
-> **Status**: Feature-complete. 46 Go files, ~8.6K lines, 22 tests. OAuth, audit logging, teams, schedules, Prometheus metrics.
+> **Status**: Feature-complete. 48 Go files, ~10K lines, 22 tests. OAuth, audit logging, teams, schedules, AI Teams (workflows), skill credentials, Prometheus metrics, CI/CD.
 
 ---
 
@@ -33,7 +33,7 @@ See [agent-platform-docs](https://github.com/bitop-dev/agent-platform-docs) for 
 
 ---
 
-## API Endpoints (62 routes)
+## API Endpoints (70 routes)
 
 ### Public (no auth required)
 
@@ -144,6 +144,30 @@ OAuth flow: server redirects to provider → callback creates/links user → red
 | POST | `/api/v1/invitations/:id/accept` | Accept invitation |
 | DELETE | `/api/v1/teams/:id/members/:user_id` | Remove member |
 
+#### Credentials (Skill Secrets)
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/v1/credentials` | Store a credential (AES-256-GCM encrypted) |
+| GET | `/api/v1/credentials` | List credentials (hints only, never full value) |
+| PUT | `/api/v1/credentials/:id` | Update credential value |
+| DELETE | `/api/v1/credentials/:id` | Delete credential |
+
+Credentials are per-user encrypted secrets (e.g. `GITHUB_TOKEN`, `SLACK_WEBHOOK_URL`) automatically injected as `EnvVars` into WASM/container sandbox at run time.
+
+#### Workflows (AI Teams)
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/v1/workflows` | Create workflow with steps |
+| GET | `/api/v1/workflows` | List user's workflows |
+| GET | `/api/v1/workflows/:id` | Get workflow with steps |
+| PUT | `/api/v1/workflows/:id` | Update workflow |
+| DELETE | `/api/v1/workflows/:id` | Delete workflow |
+| POST | `/api/v1/workflows/:id/run` | Trigger workflow execution |
+| GET | `/api/v1/workflows/:id/runs` | List workflow runs |
+| GET | `/api/v1/workflow-runs/:run_id` | Get run with step statuses |
+
+Workflows are multi-agent DAG pipelines. Each step references an agent and a mission template with variable substitution (`{{input}}`, `{{steps.NAME.output}}`). Steps with no dependencies run in parallel; dependent steps wait for prerequisites.
+
 #### Audit Log
 | Method | Path | Description |
 |---|---|---|
@@ -173,7 +197,7 @@ OAuth flow: server redirects to provider → callback creates/links user → red
               └──────────┼──────────┘
                          │
                     ┌────▼────┐
-                    │ Handlers│  ← Audit Logger (18 action types)
+                    │ Handlers│  ← Audit Logger (21 action types)
                     └────┬────┘
                          │
            ┌─────────┬───┼────┬──────────┐
