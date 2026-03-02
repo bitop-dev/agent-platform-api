@@ -18,3 +18,9 @@ DELETE FROM api_keys WHERE id = ? AND user_id = ?;
 
 -- name: ClearDefaultAPIKey :exec
 UPDATE api_keys SET is_default = false WHERE user_id = ? AND provider = ?;
+
+-- name: UpdateAPIKey :exec
+UPDATE api_keys SET label = ?, base_url = ?, is_default = ? WHERE id = ? AND user_id = ?;
+
+-- name: UpdateAPIKeyWithKey :exec
+UPDATE api_keys SET label = ?, key_enc = ?, key_hint = ?, base_url = ?, is_default = ? WHERE id = ? AND user_id = ?;

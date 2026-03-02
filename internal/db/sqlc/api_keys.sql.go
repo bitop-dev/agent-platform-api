@@ -180,3 +180,53 @@ func (q *Queries) ListAPIKeysByUser(ctx context.Context, userID string) ([]ListA
 	}
 	return items, nil
 }
+
+const updateAPIKey = `-- name: UpdateAPIKey :exec
+UPDATE api_keys SET label = ?, base_url = ?, is_default = ? WHERE id = ? AND user_id = ?
+`
+
+type UpdateAPIKeyParams struct {
+	Label     string `json:"label"`
+	BaseUrl   string `json:"base_url"`
+	IsDefault bool   `json:"is_default"`
+	ID        string `json:"id"`
+	UserID    string `json:"user_id"`
+}
+
+func (q *Queries) UpdateAPIKey(ctx context.Context, arg UpdateAPIKeyParams) error {
+	_, err := q.db.ExecContext(ctx, updateAPIKey,
+		arg.Label,
+		arg.BaseUrl,
+		arg.IsDefault,
+		arg.ID,
+		arg.UserID,
+	)
+	return err
+}
+
+const updateAPIKeyWithKey = `-- name: UpdateAPIKeyWithKey :exec
+UPDATE api_keys SET label = ?, key_enc = ?, key_hint = ?, base_url = ?, is_default = ? WHERE id = ? AND user_id = ?
+`
+
+type UpdateAPIKeyWithKeyParams struct {
+	Label     string `json:"label"`
+	KeyEnc    []byte `json:"key_enc"`
+	KeyHint   string `json:"key_hint"`
+	BaseUrl   string `json:"base_url"`
+	IsDefault bool   `json:"is_default"`
+	ID        string `json:"id"`
+	UserID    string `json:"user_id"`
+}
+
+func (q *Queries) UpdateAPIKeyWithKey(ctx context.Context, arg UpdateAPIKeyWithKeyParams) error {
+	_, err := q.db.ExecContext(ctx, updateAPIKeyWithKey,
+		arg.Label,
+		arg.KeyEnc,
+		arg.KeyHint,
+		arg.BaseUrl,
+		arg.IsDefault,
+		arg.ID,
+		arg.UserID,
+	)
+	return err
+}

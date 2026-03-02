@@ -100,6 +100,66 @@ func (h *APIKeyHandler) List(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"api_keys": keys})
 }
 
+// Update modifies an API key's label, base_url, default status, and optionally the key itself.
+func (h *APIKeyHandler) Update(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+	keyID := c.Params("id")
+
+	var req struct {
+		Label     string `json:"label"`
+		Key       string `json:"key"`        // optional — if empty, key is not changed
+		BaseURL   string `json:"base_url"`
+		IsDefault bool   `json:"is_default"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+	}
+
+	// Get existing key to know provider
+	existing, err := h.store.GetAPIKey(c.Context(), sqlc.GetAPIKeyParams{ID: keyID, UserID: userID})
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "key not found"})
+	}
+
+	if req.Label == "" {
+		req.Label = existing.Label
+	}
+
+	// Clear existing default if setting this as default
+	if req.IsDefault {
+		_ = h.store.ClearDefaultAPIKey(c.Context(), sqlc.ClearDefaultAPIKeyParams{
+			UserID:   userID,
+			Provider: existing.Provider,
+		})
+	}
+
+	if req.Key != "" {
+		// Update with new encrypted key
+		encrypted, err := h.encryptor.Encrypt(req.Key)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "encryption error"})
+		}
+		err = h.store.UpdateAPIKeyWithKey(c.Context(), sqlc.UpdateAPIKeyWithKeyParams{
+			Label: req.Label, KeyEnc: encrypted, KeyHint: auth.KeyHint(req.Key),
+			BaseUrl: req.BaseURL, IsDefault: req.IsDefault, ID: keyID, UserID: userID,
+		})
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update"})
+		}
+	} else {
+		// Update without changing key
+		err = h.store.UpdateAPIKey(c.Context(), sqlc.UpdateAPIKeyParams{
+			Label: req.Label, BaseUrl: req.BaseURL, IsDefault: req.IsDefault,
+			ID: keyID, UserID: userID,
+		})
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update"})
+		}
+	}
+
+	return c.JSON(fiber.Map{"status": "updated"})
+}
+
 // Delete removes an API key.
 func (h *APIKeyHandler) Delete(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
